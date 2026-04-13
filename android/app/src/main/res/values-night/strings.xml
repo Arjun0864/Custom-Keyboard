@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">FlutterBoard</string>
+    <string name="keyboard_name">FlutterBoard Keyboard</string>
+    
+    <!-- Keyboard setup -->
+    <string name="enable_keyboard">Enable FlutterBoard</string>
+    <string name="keyboard_enabled">Keyboard enabled</string>
+    <string name="set_as_default">Set as default keyboard</string>
+    <string name="keyboard_not_enabled">FlutterBoard is not enabled yet</string>
+    <string name="go_to_settings">Go to Settings</string>
+    
+    <!-- Keyboard features -->
+    <string name="suggestions">Suggestions</string>
+    <string name="emoji">Emoji</string>
+    <string name="clipboard">Clipboard</string>
+    <string name="settings">Settings</string>
+    
+    <!-- Actions -->
+    <string name="done">Done</string>
+    <string name="next">Next</string>
+    <string name="search">Search</string>
+    <string name="send">Send</string>
+    
+    <!-- Languages -->
+    <string name="english">English</string>
+    <string name="hindi">Hindi</string>
+    <string name="gujarati">Gujarati</string>
+    <string name="spanish">Spanish</string>
+    <string name="french">French</string>
+    <string name="german">German</string>
+    <string name="italian">Italian</string>
+    <string name="portuguese">Portuguese</string>
+    <string name="russian">Russian</string>
+    <string name="chinese">Chinese</string>
+    <string name="japanese">Japanese</string>
+    <string name="korean">Korean</string>
+    
+</resources>

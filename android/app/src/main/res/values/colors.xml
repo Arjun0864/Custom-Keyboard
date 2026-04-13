@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Light theme colors -->
+    <color name="colorPrimary">#2196F3</color>
+    <color name="colorPrimaryDark">#1976D2</color>
+    <color name="colorAccent">#FF4081</color>
+    
+    <!-- Keyboard colors - Light theme -->
+    <color name="keyboard_background">#F5F5F5</color>
+    <color name="key_background">#FFFFFF</color>
+    <color name="key_background_pressed">#E0E0E0</color>
+    <color name="key_text_color">#212121</color>
+    <color name="key_subtext_color">#757575</color>
+    
+    <!-- Suggestion bar -->
+    <color name="suggestion_bar_background">#EEEEEE</color>
+    <color name="suggestion_chip_background">#E3F2FD</color>
+    <color name="suggestion_text_color">#1976D2</color>
+    
+    <!-- UI elements -->
+    <color name="divider_color">#BDBDBD</color>
+    <color name="text_primary">#212121</color>
+    <color name="text_secondary">#757575</color>
+    <color name="text_disabled">#BDBDBD</color>
+    
+</resources>

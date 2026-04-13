@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">FlutterBoard</string>
+    <string name="keyboard_name">FlutterBoard Keyboard</string>
+    <string name="settings_activity">com.flutterboard.keyboard.MainActivity</string>
+</resources>

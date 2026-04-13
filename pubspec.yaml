@@ -1,0 +1,77 @@
+name: flutterboard
+description: A production-ready custom Android keyboard built with Flutter
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+  flutter: ">=3.10.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State Management
+  provider: ^6.1.0
+  flutter_riverpod: ^2.4.9
+  riverpod_annotation: ^2.3.3
+
+  # Storage
+  shared_preferences: ^2.2.2
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  sqflite: ^2.3.2
+  path_provider: ^2.1.2
+
+  # UI
+  flutter_colorpicker: ^1.0.3
+  google_fonts: ^8.0.2
+  flutter_svg: ^2.0.9
+  cached_network_image: ^3.3.1
+  lottie: ^3.0.0
+
+  # Gesture & Input
+  flutter_keyboard_visibility: ^6.0.0
+
+  # Networking (for GIF/optional cloud features)
+  http: ^1.2.0
+  dio: ^5.4.1
+
+  # Permissions
+  permission_handler: ^12.0.1
+
+  # Haptics
+  vibration: ^3.1.8
+
+  # Audio
+  audioplayers: ^6.0.0
+
+  # ML / NLP (offline)
+  tflite_flutter: ^0.12.1
+
+  # Clipboard
+  super_clipboard: ^0.9.1
+
+  # Animations
+  flutter_animate: ^4.5.0
+
+  # Utils
+  collection: ^1.18.0
+  equatable: ^2.0.5
+  freezed_annotation: ^2.4.1
+  json_annotation: ^4.8.1
+  uuid: ^4.3.3
+  intl: ^0.20.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  build_runner: ^2.4.8
+  freezed: ^2.4.6
+  json_serializable: ^6.7.1
+  riverpod_generator: ^2.3.9
+  hive_generator: ^2.0.1
+  mockito: ^5.4.4
+
+flutter:
+  uses-material-design: true

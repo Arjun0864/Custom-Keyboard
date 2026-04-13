@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Keyboard dimensions -->
+    <dimen name="keyboard_height">250dp</dimen>
+    <dimen name="keyboard_height_landscape">200dp</dimen>
+    
+    <!-- Key dimensions -->
+    <dimen name="key_width">40dp</dimen>
+    <dimen name="key_height">48dp</dimen>
+    <dimen name="key_margin">4dp</dimen>
+    <dimen name="key_corner_radius">8dp</dimen>
+    <dimen name="key_text_size">16sp</dimen>
+    
+    <!-- Row padding -->
+    <dimen name="row_padding">8dp</dimen>
+    <dimen name="row_height">56dp</dimen>
+    
+    <!-- Suggestion bar -->
+    <dimen name="suggestion_bar_height">48dp</dimen>
+    <dimen name="suggestion_chip_padding">8dp</dimen>
+    
+    <!-- Emoji panel -->
+    <dimen name="emoji_panel_height">256dp</dimen>
+    <dimen name="emoji_size">32dp</dimen>
+    
+    <!-- Text sizes -->
+    <dimen name="text_size_normal">14sp</dimen>
+    <dimen name="text_size_large">16sp</dimen>
+    <dimen name="text_size_small">12sp</dimen>
+    
+    <!-- Padding and margins -->
+    <dimen name="default_padding">16dp</dimen>
+    <dimen name="small_padding">8dp</dimen>
+    <dimen name="large_padding">24dp</dimen>
+    
+</resources>
