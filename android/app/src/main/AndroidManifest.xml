@@ -1,32 +1,38 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.example.flutterboard">
 
-    <!-- IME Permissions -->
+    <!-- ==================== PERMISSIONS ==================== -->
+    
+    <!-- Required: IME Service - allows app to be used as input method -->
     <uses-permission android:name="android.permission.BIND_INPUT_METHOD" />
     
-    <!-- Haptics & Vibration -->
+    <!-- Haptics & Vibration Feedback -->
     <uses-permission android:name="android.permission.VIBRATE" />
     
-    <!-- Media & Audio -->
+    <!-- Audio for keyboard sound effects -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    
+    <!-- Network access if needed -->
     <uses-permission android:name="android.permission.INTERNET" />
     
-    <!-- Clipboard -->
+    <!-- Clipboard access for clipboard feature -->
     <uses-permission android:name="android.permission.READ_CLIPBOARD" />
     <uses-permission android:name="android.permission.WRITE_CLIPBOARD" />
-    
-    <!-- System Settings -->
-    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
+    <!-- ==================== APPLICATION ==================== -->
+    
     <application
         android:label="@string/app_name"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="false"
         android:fullBackupContent="false"
-        android:supportsRtl="true">
+        android:supportsRtl="true"
+        android:usesCleartextTraffic="false">
         
-        <!-- Settings/Main Activity -->
+        <!-- ==================== SETTINGS ACTIVITY ==================== -->
+        <!-- Main Settings/Configuration Activity launched from Settings -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -36,42 +42,66 @@
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize">
+            
+            <!-- Flutter Theme Meta Data -->
             <meta-data
-              android:name="io.flutter.embedding.android.NormalTheme"
-              android:resource="@style/NormalTheme" />
+                android:name="io.flutter.embedding.android.NormalTheme"
+                android:resource="@style/NormalTheme" />
+            
+            <!-- Main Launcher Entry Point -->
             <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
         
-        <!-- Input Method Service (Keyboard) -->
+        <!-- ==================== INPUT METHOD SERVICE ==================== -->
+        <!-- Custom Keyboard IME Service -->
         <service
             android:name=".FlutterBoardIME"
             android:exported="true"
             android:label="@string/keyboard_name"
             android:permission="android.permission.BIND_INPUT_METHOD"
-            android:enabled="true">
-            <intent-filter>
+            android:enabled="true"
+            android:directBootAware="false">
+            
+            <!-- InputMethod service intent filter -->
+            <!-- This tells Android this service is an Input Method -->
+            <intent-filter android:priority="100">
                 <action android:name="android.view.InputMethod" />
             </intent-filter>
+            
+            <!-- IME metadata pointing to method.xml configuration -->
+            <!-- Contains settings activity and other IME properties -->
             <meta-data
                 android:name="android.view.im"
                 android:resource="@xml/method" />
         </service>
         
-        <!-- Flutter Embedding Meta Data -->
+        <!-- ==================== ADDITIONAL SERVICES ==================== -->
+        <!-- Additional service for Kotlin InputMethodService bridge (if needed) -->
+        <service
+            android:name=".InputMethodService"
+            android:exported="false"
+            android:enabled="true" />
+        
+        <!-- ==================== META DATA ==================== -->
+        <!-- Flutter Embedding Version (always set to 2 for current Flutter) -->
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
     </application>
     
-    <!-- Query commonly used apps -->
+    <!-- ==================== QUERIES ==================== -->
+    <!-- Declare what apps this keyboard might interact with -->
     <queries>
+        <!-- Allow querying for text processing apps -->
         <intent>
-            <action android:name="android.intent.action.PROCESS_TEXT"/>
-            <data android:mimeType="text/plain"/>
+            <action android:name="android.intent.action.PROCESS_TEXT" />
+            <data android:mimeType="text/plain" />
         </intent>
+        
+        <!-- Allow querying for web browsers -->
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="https" />
