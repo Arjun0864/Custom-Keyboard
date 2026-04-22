@@ -105,11 +105,11 @@ class EmojiKeyboard extends StatefulWidget {
   final double height;
 
   const EmojiKeyboard({
-    Key? key,
+    super.key,
     this.keyboardController,
     required this.onBack,
     this.height = 300,
-  }) : super(key: key);
+  });
 
   @override
   State<EmojiKeyboard> createState() => _EmojiKeyboardState();

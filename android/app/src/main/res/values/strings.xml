@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">FlutterBoard</string>
-    <string name="keyboard_name">FlutterBoard Keyboard</string>
+    <string name="app_name">AB Keyboard</string>
+    <string name="keyboard_name">AB Keyboard</string>
     
     <!-- Keyboard setup -->
-    <string name="enable_keyboard">Enable FlutterBoard</string>
+    <string name="enable_keyboard">Enable AB Keyboard</string>
     <string name="keyboard_enabled">Keyboard enabled</string>
     <string name="set_as_default">Set as default keyboard</string>
-    <string name="keyboard_not_enabled">FlutterBoard is not enabled yet</string>
+    <string name="keyboard_not_enabled">AB Keyboard is not enabled yet</string>
     <string name="go_to_settings">Go to Settings</string>
     
     <!-- Keyboard features -->

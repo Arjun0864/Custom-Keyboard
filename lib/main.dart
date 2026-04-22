@@ -6,6 +6,7 @@ import 'themes/theme_provider.dart';
 import 'features/clipboard/clipboard_database.dart';
 import 'features/glide_typing/glide_controller.dart';
 import 'keyboard/keyboard_widget.dart';
+import 'features/settings/goodlock_settings_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -73,10 +74,10 @@ class FlutterBoardApp extends StatelessWidget {
             return Consumer<ThemeProvider>(
               builder: (context, themeProvider, _) {
                 return MaterialApp(
-                  title: 'FlutterBoard',
+                  title: 'AB Keyboard',
                   debugShowCheckedModeBanner: false,
                   theme: themeProvider.getThemeData(),
-                  home: const KeyboardScreen(),
+                  home: const AppHomeScreen(),
                 );
               },
             );
@@ -87,9 +88,56 @@ class FlutterBoardApp extends StatelessWidget {
   }
 }
 
-/// Main keyboard screen that displays the integrated keyboard
+/// Main screen that decides whether to show keyboard or settings
+class AppHomeScreen extends StatefulWidget {
+  const AppHomeScreen({super.key});
+
+  @override
+  State<AppHomeScreen> createState() => _AppHomeScreenState();
+}
+
+class _AppHomeScreenState extends State<AppHomeScreen> {
+  bool _isKeyboardMode = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkKeyboardMode();
+  }
+
+  Future<void> _checkKeyboardMode() async {
+    try {
+      // Check if we're running as IME (keyboard mode)
+      const platform = MethodChannel('com.flutterboard/keyboard');
+      final result = await platform.invokeMethod('isKeyboardMode');
+      if (result == true) {
+        setState(() {
+          _isKeyboardMode = true;
+        });
+      }
+    } catch (e) {
+      // If method call fails, we're not in keyboard mode
+      setState(() {
+        _isKeyboardMode = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isKeyboardMode) {
+      // Show keyboard when used as IME
+      return const KeyboardScreen();
+    } else {
+      // Show settings when app is opened from launcher
+      return const SettingsScreen();
+    }
+  }
+}
+
+/// Keyboard screen that displays the integrated keyboard (for IME mode)
 class KeyboardScreen extends StatefulWidget {
-  const KeyboardScreen({Key? key}) : super(key: key);
+  const KeyboardScreen({super.key});
 
   @override
   State<KeyboardScreen> createState() => _KeyboardScreenState();
@@ -99,17 +147,23 @@ class _KeyboardScreenState extends State<KeyboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.transparent,
       body: Consumer<ThemeProvider>(
         builder: (context, themeProvider, _) {
-          return Container(
-            color: themeProvider.getKeyboardBackgroundColor(),
-            child: const SafeArea(
-              child: KeyboardWidget(),
-            ),
-          );
+          return const KeyboardWidget();
         },
       ),
     );
+  }
+}
+
+/// Settings screen that shows when app is opened from launcher
+class SettingsScreen extends StatelessWidget {
+  const SettingsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const GoodLockSettingsScreen();
   }
 }
 

@@ -9,7 +9,6 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import android.view.View
 import android.view.inputmethod.EditorInfo
-import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputMethodManager
 import io.flutter.embedding.android.FlutterView
 import io.flutter.embedding.engine.FlutterEngine
@@ -37,8 +36,10 @@ class FlutterBoardIME : InputMethodService() {
     private var inputChannel: MethodChannel? = null
     private var eventChannel: EventChannel? = null
     private var eventSink: EventChannel.EventSink? = null
+    
+    // FIXED: Add container variable to prevent detach/reattach
+    private var container: android.widget.FrameLayout? = null
 
-    private var currentInputConnection: InputConnection? = null
     private var currentEditorInfo: EditorInfo? = null
     private var lastComposingText: String = ""
 
@@ -103,7 +104,7 @@ class FlutterBoardIME : InputMethodService() {
     /**
      * Handle method calls from Flutter
      */
-    private fun handleMethodCall(call: MethodChannel.MethodCall, result: MethodChannel.Result) {
+    private fun handleMethodCall(call: io.flutter.plugin.common.MethodCall, result: io.flutter.plugin.common.MethodChannel.Result) {
         when (call.method) {
             "commitText" -> {
                 val text = call.argument<String>("text") ?: ""
@@ -195,6 +196,12 @@ class FlutterBoardIME : InputMethodService() {
                 result.success(true)
             }
 
+            "setKeyboardHeight" -> {
+                val heightPx = call.argument<Int>("height") ?: 300
+                setKeyboardHeight(heightPx)
+                result.success(null)
+            }
+
             else -> result.notImplemented()
         }
     }
@@ -202,7 +209,7 @@ class FlutterBoardIME : InputMethodService() {
     /**
      * Handle input-related method calls
      */
-    private fun handleInputCall(call: MethodChannel.MethodCall, result: MethodChannel.Result) {
+    private fun handleInputCall(call: io.flutter.plugin.common.MethodCall, result: io.flutter.plugin.common.MethodChannel.Result) {
         when (call.method) {
             "getClipboardText" -> {
                 val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
@@ -253,16 +260,43 @@ class FlutterBoardIME : InputMethodService() {
 
     /**
      * Create the input view (Flutter keyboard UI)
+     * CRITICAL: Must return WRAP_CONTENT height to prevent fullscreen takeover
+     * FIXED: Do NOT detach/reattach FlutterView - causes blank screen
      */
     override fun onCreateInputView(): View {
-        flutterView = FlutterView(this).apply {
-            attachToFlutterEngine(flutterEngine!!)
+        // FIXED: Only create FlutterView once, reuse it
+        if (flutterView == null) {
+            flutterView = FlutterView(this).apply {
+                attachToFlutterEngine(flutterEngine!!)
+            }
+        }
+
+        // FIXED: Reuse container if it exists
+        if (container == null) {
+            container = android.widget.FrameLayout(this)
+            
+            // CRITICAL: WRAP_CONTENT height ensures keyboard doesn't cover entire screen
+            // Use WindowManager.LayoutParams for proper IME behavior
+            val imeParams = android.view.WindowManager.LayoutParams().apply {
+                width = android.view.WindowManager.LayoutParams.MATCH_PARENT
+                height = android.view.WindowManager.LayoutParams.WRAP_CONTENT
+                gravity = android.view.Gravity.BOTTOM
+                flags = android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                        android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                type = android.view.WindowManager.LayoutParams.TYPE_INPUT_METHOD
+            }
+            container!!.layoutParams = imeParams
+            
+            container!!.addView(flutterView, android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                android.widget.FrameLayout.LayoutParams.WRAP_CONTENT
+            ))
         }
 
         // Notify Flutter that keyboard view is created
         methodChannel?.invokeMethod("onKeyboardCreated", null)
 
-        return flutterView!!
+        return container!!
     }
 
     /**
@@ -271,7 +305,6 @@ class FlutterBoardIME : InputMethodService() {
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
         currentEditorInfo = info
-        currentInputConnection = currentInputConnection
 
         // Notify Flutter
         val editorInfo = getEditorInfoMap()
@@ -309,6 +342,15 @@ class FlutterBoardIME : InputMethodService() {
             "newSelStart" to newSelStart,
             "newSelEnd" to newSelEnd
         ))
+    }
+
+    /**
+     * FIXED: Disable fullscreen mode to prevent blank screen on small displays
+     * Fullscreen mode causes layout recalculation and blank flashes
+     */
+    override fun isFullscreenMode(): Boolean {
+        // FIXED: Always return false to prevent fullscreen takeover
+        return false
     }
 
     // ====== Text Operations ======
@@ -491,5 +533,26 @@ class FlutterBoardIME : InputMethodService() {
             // Silently handle cleanup errors
         }
         super.onDestroy()
+    }
+
+    /**
+     * Set keyboard height dynamically (called from Flutter settings)
+     * Height is in pixels
+     */
+    fun setKeyboardHeight(heightPx: Int) {
+        flutterView?.layoutParams?.apply {
+            height = heightPx
+        }
+    }
+
+    /**
+     * Ensure keyboard doesn't take fullscreen
+     * Called after view is created
+     */
+    private fun ensureProperKeyboardBehavior() {
+        // Request that the keyboard be shown at the bottom
+        // This prevents fullscreen takeover
+        // Note: window is not available in InputMethodService
+        // The proper behavior is ensured through LayoutParams
     }
 }

@@ -29,7 +29,7 @@ dependencies:
   permission_handler: ^12.0.1
 
   # Haptics & Vibration
-  vibration: ^1.8.4
+  vibration: ^2.0.0
 
   # Audio / Sound Effects
   audioplayers: ^6.1.0

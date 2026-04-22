@@ -383,7 +383,7 @@ class ThemeProvider extends ChangeNotifier {
 
   Future<void> setBackgroundColor(Color color) async {
     _backgroundColor = color;
-    await _prefs.setString('backgroundColor', '#${color.value.toRadixString(16).padLeft(8, '0').toUpperCase()}');
+    await _prefs.setString('backgroundColor', '#${color.toARGB32().toRadixString(16).padLeft(8, '0').toUpperCase()}');
     notifyListeners();
   }
 
@@ -470,7 +470,7 @@ class ThemeProvider extends ChangeNotifier {
   String _captureCurrentThemeJson() {
     return jsonEncode({
       'colorMode': _colorMode.index,
-      'accentColor': '#${_accentColor.value.toRadixString(16).padLeft(8, '0')}',
+      'accentColor': '#${_accentColor.toARGB32().toRadixString(16).padLeft(8, '0')}',
       'isCustomColor': _isCustomColor,
       'customColorHex': _customColorHex,
       'keyOpacity': _keyOpacity,
@@ -487,7 +487,7 @@ class ThemeProvider extends ChangeNotifier {
       'oneHandedMode': _oneHandedMode.index,
       'oneHandedShiftPercent': _oneHandedShiftPercent,
       'backgroundStyle': _backgroundStyle.index,
-      'backgroundColor': '#${_backgroundColor.value.toRadixString(16).padLeft(8, '0')}',
+      'backgroundColor': '#${_backgroundColor.toARGB32().toRadixString(16).padLeft(8, '0')}',
       'backgroundImagePath': _backgroundImagePath,
       'keyShadow': _keyShadow,
       'shadowIntensity': _shadowIntensity,
@@ -547,7 +547,7 @@ class ThemeProvider extends ChangeNotifier {
     await _prefs.setInt('oneHandedMode', _oneHandedMode.index);
     await _prefs.setDouble('oneHandedShiftPercent', _oneHandedShiftPercent);
     await _prefs.setInt('backgroundStyle', _backgroundStyle.index);
-    await _prefs.setString('backgroundColor', '#${_backgroundColor.value.toRadixString(16).padLeft(8, '0').toUpperCase()}');
+    await _prefs.setString('backgroundColor', '#${_backgroundColor.toARGB32().toRadixString(16).padLeft(8, '0').toUpperCase()}');
     await _prefs.setString('backgroundImagePath', _backgroundImagePath);
     await _prefs.setBool('keyShadow', _keyShadow);
     await _prefs.setDouble('shadowIntensity', _shadowIntensity);

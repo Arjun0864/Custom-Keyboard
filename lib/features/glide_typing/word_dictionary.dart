@@ -1,5 +1,6 @@
 /// Word dictionary and matching algorithms for glide typing.
-///
+library;
+
 /// Contains:
 /// - Top 500 common English words
 /// - Word matching and scoring functions

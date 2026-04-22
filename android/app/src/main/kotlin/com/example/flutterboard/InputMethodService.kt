@@ -11,7 +11,7 @@ import android.widget.FrameLayout
 import io.flutter.embedding.android.FlutterView
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.dart.DartExecutor
-import io.flutter.view.FlutterMain
+import io.flutter.plugin.common.MethodChannel
 import android.os.Build
 
 /**
@@ -48,8 +48,6 @@ class InputMethodService : InputMethodService() {
      */
     private fun initializeFlutterEngine() {
         try {
-            FlutterMain.ensureInitializationComplete(this, null)
-            
             // Create Flutter Engine
             flutterEngine = FlutterEngine(this)
             
@@ -76,8 +74,10 @@ class InputMethodService : InputMethodService() {
     private fun setupPlatformChannel() {
         if (flutterEngine == null) return
         
-        val methodChannel = io.flutter.embedding.engine.FlutterEngine
-            .makeMethodChannelWithCallbacks(flutterEngine!!, CHANNEL_NAME)
+        val methodChannel = MethodChannel(
+            flutterEngine!!.dartExecutor.binaryMessenger,
+            CHANNEL_NAME
+        )
     }
     
     /**

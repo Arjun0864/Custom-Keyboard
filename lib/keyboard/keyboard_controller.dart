@@ -291,14 +291,9 @@ class KeyboardController extends ChangeNotifier {
   }
 
   /// Delete a character from the Android IME
-  ///
-  /// Tells the IME to delete the last character
-  /// from the connected text field
   Future<void> _deleteFromIME() async {
     try {
-      await platform.invokeMethod('deleteText', {
-        'count': 1,
-      });
+      await platform.invokeMethod('deleteBackward');
     } catch (e) {
       debugPrint('Error deleting from IME: $e');
     }
