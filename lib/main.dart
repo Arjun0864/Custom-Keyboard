@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'keyboard/keyboard_controller.dart';
 import 'themes/theme_provider.dart';
 import 'features/clipboard/clipboard_database.dart';
+import 'features/glide_typing/glide_controller.dart';
 import 'keyboard/keyboard_widget.dart';
 
 void main() async {
@@ -22,7 +23,7 @@ void main() async {
 
 /// Main app with all providers integrated
 class FlutterBoardApp extends StatelessWidget {
-  const FlutterBoardApp({Key? key}) : super(key: key);
+  const FlutterBoardApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -36,6 +37,11 @@ class FlutterBoardApp extends StatelessWidget {
         // Keyboard controller for input management
         ChangeNotifierProvider(
           create: (_) => KeyboardController(),
+        ),
+
+        // Glide typing controller for swipe input
+        ChangeNotifierProvider(
+          create: (_) => GlideController(),
         ),
 
         // Clipboard database for history

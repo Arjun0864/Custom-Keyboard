@@ -28,7 +28,7 @@ enum KeyboardLayout {
 class KeyboardController extends ChangeNotifier {
   // Platform channel for communication with Android IME
   static const platform =
-      MethodChannel('com.example.flutterboard/ime');
+      MethodChannel('com.flutterboard/keyboard');
 
   // Text buffer - accumulates input before sending to IME
   String _textBuffer = '';
@@ -282,7 +282,7 @@ class KeyboardController extends ChangeNotifier {
   /// to actually commit text to the focused text field
   Future<void> _sendToIME(String character) async {
     try {
-      await platform.invokeMethod('insertText', {
+      await platform.invokeMethod('commitText', {
         'text': character,
       });
     } catch (e) {
@@ -368,8 +368,5 @@ class KeyboardController extends ChangeNotifier {
     };
   }
 
-  @override
-  void dispose() {
-    super.dispose();
-  }
+
 }

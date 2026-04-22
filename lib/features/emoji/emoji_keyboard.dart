@@ -137,17 +137,6 @@ class _EmojiKeyboardState extends State<EmojiKeyboard>
     EmojiCategory.symbols,
   ];
 
-  final List<String> _categoryNames = [
-    'Recent',
-    'Smileys',
-    'People',
-    'Animals',
-    'Food',
-    'Travel',
-    'Objects',
-    'Symbols',
-  ];
-
   final List<IconData> _categoryIcons = [
     Icons.schedule,
     Icons.sentiment_satisfied,
@@ -400,10 +389,10 @@ class EmojiKeyboardBottomSheet extends StatelessWidget {
   final double height;
 
   const EmojiKeyboardBottomSheet({
-    Key? key,
+    super.key,
     this.keyboardController,
     this.height = 400,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

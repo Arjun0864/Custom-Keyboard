@@ -75,7 +75,7 @@ class KeyButton extends StatefulWidget {
   final bool isSymbolMode;
 
   const KeyButton({
-    Key? key,
+    super.key,
     required this.label,
     this.keyType = KeyType.character,
     this.width = 40,
@@ -93,7 +93,7 @@ class KeyButton extends StatefulWidget {
     this.isPressed = false,
     this.isShiftActive = false,
     this.isSymbolMode = false,
-  }) : super(key: key);
+  });
 
   @override
   State<KeyButton> createState() => _KeyButtonState();

@@ -4,7 +4,7 @@ import '../../themes/theme_provider.dart';
 
 /// GoodLock-style keyboard settings screen with live preview
 class GoodLockSettingsScreen extends StatefulWidget {
-  const GoodLockSettingsScreen({Key? key}) : super(key: key);
+  const GoodLockSettingsScreen({super.key});
 
   @override
   State<GoodLockSettingsScreen> createState() => _GoodLockSettingsScreenState();
@@ -12,7 +12,6 @@ class GoodLockSettingsScreen extends StatefulWidget {
 
 class _GoodLockSettingsScreenState extends State<GoodLockSettingsScreen> {
   final TextEditingController _themeNameController = TextEditingController();
-  bool _showSaveDialog = false;
 
   @override
   void dispose() {
@@ -70,7 +69,7 @@ class _GoodLockSettingsScreenState extends State<GoodLockSettingsScreen> {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: ElevatedButton.icon(
-                    onPressed: () => setState(() => _showSaveDialog = true),
+                    onPressed: () => _showSaveThemeDialog(context, themeProvider),
                     icon: const Icon(Icons.save),
                     label: const Text('Save Current Theme'),
                     style: ElevatedButton.styleFrom(
@@ -1139,6 +1138,45 @@ class _GoodLockSettingsScreenState extends State<GoodLockSettingsScreen> {
     );
   }
 
+  void _showSaveThemeDialog(BuildContext context, ThemeProvider themeProvider) {
+    final nameController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Save Theme'),
+        content: TextField(
+          controller: nameController,
+          decoration: const InputDecoration(
+            hintText: 'Enter theme name',
+            labelText: 'Theme Name',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              nameController.dispose();
+              Navigator.pop(context);
+            },
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              if (nameController.text.isNotEmpty) {
+                themeProvider.saveAsCustomTheme(nameController.text);
+                nameController.dispose();
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Theme saved successfully')),
+                );
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showDeleteConfirmDialog(
     BuildContext context,
     ThemeProvider themeProvider,
@@ -1163,56 +1201,6 @@ class _GoodLockSettingsScreenState extends State<GoodLockSettingsScreen> {
               );
             },
             child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_showSaveDialog) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _showSaveThemeDialog(context);
-      });
-      _showSaveDialog = false;
-    }
-    return super.build(context);
-  }
-
-  void _showSaveThemeDialog(BuildContext context) {
-    final themeProvider = context.read<ThemeProvider>();
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Save Theme'),
-        content: TextField(
-          controller: _themeNameController,
-          decoration: const InputDecoration(
-            hintText: 'Enter theme name',
-            labelText: 'Theme Name',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              _themeNameController.clear();
-              Navigator.pop(context);
-            },
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              if (_themeNameController.text.isNotEmpty) {
-                themeProvider.saveAsCustomTheme(_themeNameController.text);
-                _themeNameController.clear();
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Theme saved successfully')),
-                );
-              }
-            },
-            child: const Text('Save'),
           ),
         ],
       ),

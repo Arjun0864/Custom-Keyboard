@@ -470,7 +470,7 @@ class ThemeProvider extends ChangeNotifier {
   String _captureCurrentThemeJson() {
     return jsonEncode({
       'colorMode': _colorMode.index,
-      'accentColor': _accentColor.value.toRadixString(16),
+      'accentColor': '#${_accentColor.value.toRadixString(16).padLeft(8, '0')}',
       'isCustomColor': _isCustomColor,
       'customColorHex': _customColorHex,
       'keyOpacity': _keyOpacity,
@@ -487,7 +487,7 @@ class ThemeProvider extends ChangeNotifier {
       'oneHandedMode': _oneHandedMode.index,
       'oneHandedShiftPercent': _oneHandedShiftPercent,
       'backgroundStyle': _backgroundStyle.index,
-      'backgroundColor': _backgroundColor.value.toRadixString(16),
+      'backgroundColor': '#${_backgroundColor.value.toRadixString(16).padLeft(8, '0')}',
       'backgroundImagePath': _backgroundImagePath,
       'keyShadow': _keyShadow,
       'shadowIntensity': _shadowIntensity,
@@ -680,4 +680,20 @@ class ThemeProvider extends ChangeNotifier {
   Color getKeyboardBackgroundColor() {
     return _backgroundColor;
   }
+
+  /// Check if dark mode is enabled
+  bool get isDarkMode => _colorMode == ColorMode.dark;
+
+  /// Get a readable string for the current color mode
+  String get colorModeString {
+    switch (_colorMode) {
+      case ColorMode.dark:
+        return 'Dark';
+      case ColorMode.light:
+        return 'Light';
+      case ColorMode.auto:
+        return 'Auto';
+    }
+  }
+
 }

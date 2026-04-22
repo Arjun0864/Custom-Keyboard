@@ -1,4 +1,4 @@
-/// Word dictionary and matching algorithms for glide typing
+/// Word dictionary and matching algorithms for glide typing.
 ///
 /// Contains:
 /// - Top 500 common English words

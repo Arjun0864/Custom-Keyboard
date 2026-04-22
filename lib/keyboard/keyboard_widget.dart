@@ -75,14 +75,14 @@ class KeyboardWidget extends StatefulWidget {
   final double keySpacing;
 
   const KeyboardWidget({
-    Key? key,
+    super.key,
     this.backgroundColor,
     this.keyColor,
     this.fontSize = 16,
     this.keyBorderRadius = 4,
     this.height,
     this.keySpacing = 4,
-  }) : super(key: key);
+  });
 
   @override
   State<KeyboardWidget> createState() => _KeyboardWidgetState();
@@ -501,9 +501,8 @@ class _KeyboardWidgetState extends State<KeyboardWidget> {
         );
 
       case KeyboardViewState.settings:
-        return SettingsScreen();
+        return const SettingsScreen();
 
-      case KeyboardViewState.main:
       default:
         return _buildKeyboardMain(
           keyboardController,

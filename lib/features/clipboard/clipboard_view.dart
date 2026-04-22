@@ -34,7 +34,7 @@ class ClipboardView extends StatefulWidget {
   final Duration animationDuration;
 
   const ClipboardView({
-    Key? key,
+    super.key,
     this.onClipSelected,
     this.onClipDeleted,
     this.onClipPinned,
@@ -42,7 +42,7 @@ class ClipboardView extends StatefulWidget {
     this.height = 80,
     this.isVisible = true,
     this.animationDuration = const Duration(milliseconds: 300),
-  }) : super(key: key);
+  });
 
   @override
   State<ClipboardView> createState() => _ClipboardViewState();
@@ -96,7 +96,7 @@ class _ClipboardViewState extends State<ClipboardView>
         _clips = clips;
       });
     } catch (e) {
-      print('Error loading clips: $e');
+      debugPrint('Error loading clips: $e');
     }
   }
 
@@ -232,12 +232,14 @@ class _ClipboardViewState extends State<ClipboardView>
     widget.onClipDeleted?.call();
     _loadClips();
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Clip deleted'),
-        duration: Duration(seconds: 2),
-      ),
-    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Clip deleted'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   @override
@@ -397,11 +399,11 @@ class CompactClipboardView extends StatelessWidget {
   final VoidCallback? onShowFull;
 
   const CompactClipboardView({
-    Key? key,
+    super.key,
     required this.clips,
     this.onClipSelected,
     this.onShowFull,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

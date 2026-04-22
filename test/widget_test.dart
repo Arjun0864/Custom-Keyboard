@@ -13,7 +13,7 @@ import 'package:flutterboard/main.dart';
 void main() {
   testWidgets('App renders without crashing', (WidgetTester tester) async {
     // Build our app and trigger a frame.
-    await tester.pumpWidget(const FlutterBoardSettingsApp());
+    await tester.pumpWidget(const FlutterBoardApp());
 
     // Verify that the app renders
     expect(find.byType(MaterialApp), findsOneWidget);

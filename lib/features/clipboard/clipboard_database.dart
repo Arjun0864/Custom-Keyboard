@@ -1,5 +1,5 @@
+import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
-import 'package:path/path.dart';
 import 'clipboard_model.dart';
 
 /// ClipboardDatabase manages all clipboard history data
@@ -42,7 +42,7 @@ class ClipboardDatabase {
     if (_isInitialized) return;
 
     final databasesPath = await getDatabasesPath();
-    final path = join(databasesPath, _databaseName);
+    final path = '$databasesPath/$_databaseName';
 
     _database = await openDatabase(
       path,
@@ -108,7 +108,7 @@ class ClipboardDatabase {
 
       return clip.copyWith(id: id);
     } catch (e) {
-      print('Error saving clip: $e');
+      debugPrint('Error saving clip: $e');
       rethrow;
     }
   }
@@ -129,7 +129,7 @@ class ClipboardDatabase {
         maps.map((map) => ClipItem.fromMap(map)),
       );
     } catch (e) {
-      print('Error getting all clips: $e');
+      debugPrint('Error getting all clips: $e');
       return [];
     }
   }
@@ -148,7 +148,7 @@ class ClipboardDatabase {
       if (maps.isEmpty) return null;
       return ClipItem.fromMap(maps.first);
     } catch (e) {
-      print('Error getting clip by ID: $e');
+      debugPrint('Error getting clip by ID: $e');
       return null;
     }
   }
@@ -168,7 +168,7 @@ class ClipboardDatabase {
         maps.map((map) => ClipItem.fromMap(map)),
       );
     } catch (e) {
-      print('Error getting recent clips: $e');
+      debugPrint('Error getting recent clips: $e');
       return [];
     }
   }
@@ -187,7 +187,7 @@ class ClipboardDatabase {
 
       return result > 0;
     } catch (e) {
-      print('Error pinning clip: $e');
+      debugPrint('Error pinning clip: $e');
       return false;
     }
   }
@@ -206,7 +206,7 @@ class ClipboardDatabase {
 
       return result > 0;
     } catch (e) {
-      print('Error unpinning clip: $e');
+      debugPrint('Error unpinning clip: $e');
       return false;
     }
   }
@@ -221,7 +221,7 @@ class ClipboardDatabase {
 
       return clip.isPinned ? unpinClip(id) : pinClip(id);
     } catch (e) {
-      print('Error toggling pin: $e');
+      debugPrint('Error toggling pin: $e');
       return false;
     }
   }
@@ -239,7 +239,7 @@ class ClipboardDatabase {
 
       return result > 0;
     } catch (e) {
-      print('Error deleting clip: $e');
+      debugPrint('Error deleting clip: $e');
       return false;
     }
   }
@@ -259,7 +259,7 @@ class ClipboardDatabase {
 
       return result > 0;
     } catch (e) {
-      print('Error deleting multiple clips: $e');
+      debugPrint('Error deleting multiple clips: $e');
       return false;
     }
   }
@@ -276,7 +276,7 @@ class ClipboardDatabase {
 
       return result >= 0;
     } catch (e) {
-      print('Error deleting unpinned clips: $e');
+      debugPrint('Error deleting unpinned clips: $e');
       return false;
     }
   }
@@ -291,7 +291,7 @@ class ClipboardDatabase {
       await _database.delete(_tableName);
       return true;
     } catch (e) {
-      print('Error clearing all clips: $e');
+      debugPrint('Error clearing all clips: $e');
       return false;
     }
   }
@@ -307,7 +307,7 @@ class ClipboardDatabase {
 
       return Sqflite.firstIntValue(result) ?? 0;
     } catch (e) {
-      print('Error getting clip count: $e');
+      debugPrint('Error getting clip count: $e');
       return 0;
     }
   }
@@ -323,7 +323,7 @@ class ClipboardDatabase {
 
       return Sqflite.firstIntValue(result) ?? 0;
     } catch (e) {
-      print('Error getting pinned count: $e');
+      debugPrint('Error getting pinned count: $e');
       return 0;
     }
   }
@@ -355,7 +355,7 @@ class ClipboardDatabase {
         }
       }
     } catch (e) {
-      print('Error enforcing max items: $e');
+      debugPrint('Error enforcing max items: $e');
     }
   }
 
@@ -378,7 +378,7 @@ class ClipboardDatabase {
         maps.map((map) => ClipItem.fromMap(map)),
       );
     } catch (e) {
-      print('Error searching clips: $e');
+      debugPrint('Error searching clips: $e');
       return [];
     }
   }
@@ -400,7 +400,7 @@ class ClipboardDatabase {
     try {
       return await _database.query(_tableName);
     } catch (e) {
-      print('Error exporting clips: $e');
+      debugPrint('Error exporting clips: $e');
       return [];
     }
   }
@@ -415,7 +415,7 @@ class ClipboardDatabase {
         'databasePath': _database.path,
       };
     } catch (e) {
-      print('Error getting statistics: $e');
+      debugPrint('Error getting statistics: $e');
       return {};
     }
   }
