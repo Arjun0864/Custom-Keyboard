@@ -1,21 +1,20 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'dart:async';
 import 'key_widget.dart';
 import 'keyboard_theme.dart';
 import 'keyboard_controller.dart';
 
-/// Numbers + Symbols panel (Samsung ?123 / #+= layout).
 class SymbolsPanel extends StatefulWidget {
   final KeyboardController controller;
-  final VoidCallback onSwitchToQwerty;
-  final VoidCallback onSwitchToEmoji;
+  final VoidCallback onQwerty;
+  final VoidCallback onEmoji;
 
   const SymbolsPanel({
     super.key,
     required this.controller,
-    required this.onSwitchToQwerty,
-    required this.onSwitchToEmoji,
+    required this.onQwerty,
+    required this.onEmoji,
   });
 
   @override
@@ -23,188 +22,132 @@ class SymbolsPanel extends StatefulWidget {
 }
 
 class _SymbolsPanelState extends State<SymbolsPanel> {
-  bool _showMore = false; // false = numbers, true = symbols
+  bool _more = false;
+  Timer? _bsTimer;
 
-  static const _numRow1 = ['1','2','3','4','5','6','7','8','9','0'];
-  static const _numRow2 = ['!','@','#','\$','%','^','&','*','(',')'];
-  static const _numRow3 = ['-','/',':',';','₹','&','@','"'];
-
-  static const _symRow1 = ['~','`','|','•','√','π','÷','×','¶','∆'];
-  static const _symRow2 = ['£','¢','€','¥','^','°','=','{','}','\\'];
-  static const _symRow3 = ['_','<','>','[',']','!','?','\''];
-
-  Timer? _backspaceTimer;
+  static const _n1 = ['1','2','3','4','5','6','7','8','9','0'];
+  static const _n2 = ['!','@','#','\$','%','^','&','*','(',')'];
+  static const _n3 = ['-','/',':',';','(',')','\$','&','@','"'];
+  static const _s1 = ['~','`','|','•','√','π','÷','×','¶','∆'];
+  static const _s2 = ['£','¢','€','₹','^','°','=','{','}','\\'];
+  static const _s3 = ['_','<','>','[',']','!','?','\'','+','-'];
 
   @override
-  void dispose() {
-    _backspaceTimer?.cancel();
-    super.dispose();
-  }
+  void dispose() { _bsTimer?.cancel(); super.dispose(); }
 
-  void _startBackspace() {
+  void _startBs() {
     widget.controller.handleBackspace();
-    _backspaceTimer = Timer.periodic(const Duration(milliseconds: 100), (_) {
+    _bsTimer = Timer.periodic(const Duration(milliseconds: 80), (_) {
       widget.controller.handleBackspace();
     });
   }
-
-  void _stopBackspace() {
-    _backspaceTimer?.cancel();
-    _backspaceTimer = null;
-  }
-
-  void _tap(String k) {
-    HapticFeedback.lightImpact();
-    widget.controller.insertCharacter(k);
-  }
+  void _stopBs() { _bsTimer?.cancel(); _bsTimer = null; }
+  void _tap(String k) { HapticFeedback.lightImpact(); widget.controller.insertCharacter(k); }
 
   @override
   Widget build(BuildContext context) {
-    final colors = KbColors.of(context);
-    final r1 = _showMore ? _symRow1 : _numRow1;
-    final r2 = _showMore ? _symRow2 : _numRow2;
-    final r3 = _showMore ? _symRow3 : _numRow3;
+    final t  = KbTheme.of(context);
+    final r1 = _more ? _s1 : _n1;
+    final r2 = _more ? _s2 : _n2;
+    final r3 = _more ? _s3 : _n3;
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(3, 6, 3, 4),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _buildRow(r1, colors),
-          const SizedBox(height: 3),
-          _buildRow(r2, colors),
-          const SizedBox(height: 3),
-          _buildRow3(r3, colors),
-          const SizedBox(height: 3),
-          _buildBottomRow(colors),
+    return LayoutBuilder(builder: (ctx, bc) {
+      final W = bc.maxWidth;
+      const hEdge = 4.0;
+      const gap   = 5.0;
+      final keyW  = (W - hEdge * 2 - gap * 9) / 10;
+      const keyH  = 44.0;
+      const rowGap = 8.0;
+
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(hEdge, 6, hEdge, 4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _row(r1, keyW, keyH, gap),
+            const SizedBox(height: rowGap),
+            _row(r2, keyW, keyH, gap),
+            const SizedBox(height: rowGap),
+            _row3w(r3, keyW, keyH, gap, t),
+            const SizedBox(height: rowGap),
+            _bottomRow(keyW, keyH, gap, t),
+          ],
+        ),
+      );
+    });
+  }
+
+  Widget _row(List<String> keys, double kw, double kh, double gap) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (int i = 0; i < keys.length; i++) ...[
+          if (i > 0) SizedBox(width: gap),
+          SizedBox(width: kw, height: kh,
+            child: KeyWidget(label: keys[i], height: kh, onTap: () => _tap(keys[i]))),
         ],
-      ),
-    );
-  }
-
-  Widget _buildRow(List<String> keys, KbColors colors) {
-    return Row(
-      children: keys.map((k) => Expanded(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 1.5),
-          child: KeyWidget(label: k, height: 52, onTap: () => _tap(k)),
-        ),
-      )).toList(),
-    );
-  }
-
-  Widget _buildRow3(List<String> keys, KbColors colors) {
-    return Row(
-      children: [
-        // Toggle more/less symbols
-        SizedBox(
-          width: _specialW(context),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 1.5),
-            child: KeyWidget(
-              isSpecial: true,
-              height: 52,
-              showPopup: false,
-              onTap: () => setState(() => _showMore = !_showMore),
-              child: Text(
-                _showMore ? '?123' : '#+= ',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: colors.keyText),
-              ),
-            ),
-          ),
-        ),
-        Expanded(
-          child: Row(
-            children: keys.map((k) => Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 1.5),
-                child: KeyWidget(label: k, height: 52, onTap: () => _tap(k)),
-              ),
-            )).toList(),
-          ),
-        ),
-        // Backspace
-        SizedBox(
-          width: _specialW(context),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 1.5),
-            child: KeyWidget(
-              isSpecial: true,
-              height: 52,
-              showPopup: false,
-              onTap: widget.controller.handleBackspace,
-              onLongPress: _startBackspace,
-              onLongPressEnd: _stopBackspace,
-              child: Icon(Icons.backspace_outlined, size: 20, color: colors.keyText),
-            ),
-          ),
-        ),
       ],
     );
   }
 
-  Widget _buildBottomRow(KbColors colors) {
+  Widget _row3w(List<String> keys, double kw, double kh, double gap, KbTheme t) {
+    final sw = kw * 1.5;
     return Row(
       children: [
-        SizedBox(
-          width: _specialW(context),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 1.5),
-            child: KeyWidget(
-              isSpecial: true,
-              height: 52,
-              showPopup: false,
-              onTap: widget.onSwitchToQwerty,
-              child: Text('ABC',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: colors.keyText)),
-            ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 1.5),
-          child: SizedBox(
-            width: 40,
-            child: KeyWidget(
-              isSpecial: true,
-              height: 52,
-              showPopup: false,
-              onTap: widget.onSwitchToEmoji,
-              child: const Text('😊', style: TextStyle(fontSize: 20)),
-            ),
-          ),
-        ),
-        Expanded(
-          flex: 4,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 1.5),
-            child: KeyWidget(
-              height: 52,
-              showPopup: false,
-              onTap: widget.controller.handleSpace,
-              child: Text('AB Keyboard',
-                  style: TextStyle(fontSize: 11, color: colors.keyText.withValues(alpha: 0.5))),
-            ),
-          ),
-        ),
-        SizedBox(
-          width: _specialW(context),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 1.5),
-            child: KeyWidget(
-              bgColor: colors.accentBlue,
-              height: 52,
-              showPopup: false,
-              onTap: widget.controller.handleEnter,
-              child: const Icon(Icons.keyboard_return, size: 20, color: Colors.white),
-            ),
-          ),
-        ),
+        SizedBox(width: sw, height: kh,
+          child: KeyWidget(
+            label: _more ? '?123' : '#+=',
+            isSpecial: true, height: kh, fontSize: 12,
+            fontWeight: FontWeight.w600, showPopup: false,
+            onTap: () => setState(() => _more = !_more),
+          )),
+        SizedBox(width: gap),
+        Expanded(child: Row(children: [
+          for (int i = 0; i < keys.length; i++) ...[
+            if (i > 0) SizedBox(width: gap),
+            Expanded(child: SizedBox(height: kh,
+              child: KeyWidget(label: keys[i], height: kh, onTap: () => _tap(keys[i])))),
+          ],
+        ])),
+        SizedBox(width: gap),
+        SizedBox(width: sw, height: kh,
+          child: KeyWidget(
+            isSpecial: true, height: kh, showPopup: false,
+            onTap: widget.controller.handleBackspace,
+            onLongPressStart: _startBs, onLongPressEnd: _stopBs,
+            icon: Icon(Icons.backspace_outlined, size: 20, color: t.keyText),
+          )),
       ],
     );
   }
 
-  double _specialW(BuildContext context) {
-    final screenW = MediaQuery.of(context).size.width;
-    return (screenW - 6 - 18) / 10 * 1.5;
+  Widget _bottomRow(double kw, double kh, double gap, KbTheme t) {
+    final sw = kw * 1.5;
+    return Row(
+      children: [
+        SizedBox(width: sw, height: kh,
+          child: KeyWidget(label: 'ABC', isSpecial: true, height: kh,
+            fontSize: 13, fontWeight: FontWeight.w600, showPopup: false,
+            onTap: widget.onQwerty)),
+        SizedBox(width: gap),
+        SizedBox(width: kw, height: kh,
+          child: KeyWidget(label: '😊', isSpecial: true, height: kh,
+            fontSize: 18, showPopup: false, onTap: widget.onEmoji)),
+        SizedBox(width: gap),
+        Expanded(child: SizedBox(height: kh,
+          child: KeyWidget(
+            height: kh, showPopup: false,
+            onTap: widget.controller.handleSpace,
+            icon: Text('English (US)',
+              style: TextStyle(fontSize: 12, color: t.spaceText)),
+          ))),
+        SizedBox(width: gap),
+        SizedBox(width: sw, height: kh,
+          child: KeyWidget(
+            label: 'Next', overrideBg: t.enterBg, overrideText: t.enterText,
+            height: kh, fontSize: 14, fontWeight: FontWeight.w600,
+            showPopup: false, onTap: widget.controller.handleEnter)),
+      ],
+    );
   }
 }

@@ -2,29 +2,40 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'keyboard_theme.dart';
 
-/// A single Samsung-style key with press animation, shadow, and popup bubble.
+/// Single Samsung-style key.
+/// - Rounded rectangle (radius 10)
+/// - White bg with bottom shadow (letter keys)
+/// - Gray bg (special keys)
+/// - 80ms press darkening
+/// - Floating popup bubble above key on press
 class KeyWidget extends StatefulWidget {
   final String label;
-  final Widget? child;          // override label with icon
-  final Color? bgColor;         // null → letterKeyBg
-  final bool isSpecial;         // uses specialKeyBg
+  final Widget? icon;
+  final bool isSpecial;       // gray background
+  final Color? overrideBg;    // e.g. blue for Enter
+  final Color? overrideText;
   final double height;
+  final double fontSize;
+  final FontWeight fontWeight;
+  final bool showPopup;
   final VoidCallback? onTap;
-  final VoidCallback? onLongPress;
+  final VoidCallback? onLongPressStart;
   final VoidCallback? onLongPressEnd;
-  final bool showPopup;         // show floating bubble on press
 
   const KeyWidget({
     super.key,
     this.label = '',
-    this.child,
-    this.bgColor,
+    this.icon,
     this.isSpecial = false,
-    this.height = 52,
-    this.onTap,
-    this.onLongPress,
-    this.onLongPressEnd,
+    this.overrideBg,
+    this.overrideText,
+    this.height = 46,
+    this.fontSize = 20,
+    this.fontWeight = FontWeight.w400,
     this.showPopup = true,
+    this.onTap,
+    this.onLongPressStart,
+    this.onLongPressEnd,
   });
 
   @override
@@ -33,114 +44,114 @@ class KeyWidget extends StatefulWidget {
 
 class _KeyWidgetState extends State<KeyWidget> {
   bool _pressed = false;
-  OverlayEntry? _popup;
+  OverlayEntry? _overlay;
 
-  void _showPopup(BuildContext ctx) {
-    if (!widget.showPopup || widget.label.isEmpty || widget.label.length > 1) return;
+  void _down(BuildContext ctx) {
+    HapticFeedback.lightImpact();
+    setState(() => _pressed = true);
+    if (widget.showPopup && widget.label.length == 1) _showBubble(ctx);
+  }
+
+  void _up() {
+    setState(() => _pressed = false);
+    _removeBubble();
+    widget.onTap?.call();
+  }
+
+  void _cancel() {
+    setState(() => _pressed = false);
+    _removeBubble();
+  }
+
+  void _showBubble(BuildContext ctx) {
     final box = ctx.findRenderObject() as RenderBox?;
     if (box == null) return;
-    final pos = box.localToGlobal(Offset.zero);
+    final pos  = box.localToGlobal(Offset.zero);
     final size = box.size;
-    final colors = KbColors.of(ctx);
+    final t    = KbTheme.of(ctx);
 
-    _popup = OverlayEntry(
+    _overlay = OverlayEntry(
       builder: (_) => Positioned(
-        left: pos.dx + size.width / 2 - 28,
-        top: pos.dy - 56,
+        left: pos.dx + size.width / 2 - 26,
+        top:  pos.dy - 52,
         child: Material(
           color: Colors.transparent,
           child: Container(
-            width: 56,
-            height: 56,
+            width: 52, height: 52,
             decoration: BoxDecoration(
-              color: colors.letterKeyBg,
-              borderRadius: BorderRadius.circular(8),
+              color: t.letterKey,
+              borderRadius: BorderRadius.circular(10),
               boxShadow: [
-                BoxShadow(
-                  color: colors.shadow,
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
+                BoxShadow(color: t.shadowColor, blurRadius: 6, offset: const Offset(0, 2)),
               ],
             ),
             alignment: Alignment.center,
             child: Text(
               widget.label.toUpperCase(),
               style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: colors.keyText,
+                fontSize: 24,
+                fontWeight: FontWeight.w500,
+                color: t.keyText,
               ),
             ),
           ),
         ),
       ),
     );
-    Overlay.of(ctx).insert(_popup!);
+    Overlay.of(ctx).insert(_overlay!);
   }
 
-  void _removePopup() {
-    _popup?.remove();
-    _popup = null;
+  void _removeBubble() {
+    _overlay?.remove();
+    _overlay = null;
   }
 
   @override
   void dispose() {
-    _removePopup();
+    _removeBubble();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final colors = KbColors.of(context);
-    final baseBg = widget.bgColor ??
-        (widget.isSpecial ? colors.specialKeyBg : colors.letterKeyBg);
-    // SAMSUNG-STYLE: darken 15% on press
-    final bg = _pressed
-        ? Color.lerp(baseBg, Colors.black, 0.15)!
-        : baseBg;
+    final t = KbTheme.of(context);
+    final baseBg = widget.overrideBg ??
+        (widget.isSpecial ? t.specialKey : t.letterKey);
+    final bg = _pressed ? Color.lerp(baseBg, Colors.black, 0.12)! : baseBg;
+    final textColor = widget.overrideText ??
+        (widget.overrideBg != null ? Colors.white : t.keyText);
 
     return GestureDetector(
-      onTapDown: (_) {
-        HapticFeedback.lightImpact();
-        setState(() => _pressed = true);
-        _showPopup(context);
-      },
-      onTapUp: (_) {
-        setState(() => _pressed = false);
-        _removePopup();
-        widget.onTap?.call();
-      },
-      onTapCancel: () {
-        setState(() => _pressed = false);
-        _removePopup();
-      },
-      onLongPress: widget.onLongPress,
-      onLongPressEnd: widget.onLongPressEnd != null
-          ? (_) => widget.onLongPressEnd!()
-          : null,
+      onTapDown:       (_) => _down(context),
+      onTapUp:         (_) => _up(),
+      onTapCancel:     ()  => _cancel(),
+      onLongPress:     widget.onLongPressStart,
+      onLongPressEnd:  widget.onLongPressEnd != null ? (_) => widget.onLongPressEnd!() : null,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 80),
         height: widget.height,
         decoration: BoxDecoration(
           color: bg,
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: BorderRadius.circular(10),
           boxShadow: [
+            // Bottom shadow — the defining Samsung key look
             BoxShadow(
-              color: colors.shadow,
+              color: t.shadowColor,
               offset: const Offset(0, 1),
               blurRadius: 0,
+              spreadRadius: 0,
             ),
           ],
         ),
         alignment: Alignment.center,
-        child: widget.child ??
+        child: widget.icon ??
             Text(
               widget.label,
               style: TextStyle(
-                fontSize: 16,
-                fontFamily: 'Roboto',
-                color: colors.keyText,
+                fontSize: widget.fontSize,
+                fontWeight: widget.fontWeight,
+                color: textColor,
+                height: 1.0,
               ),
             ),
       ),

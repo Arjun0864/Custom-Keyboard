@@ -14,28 +14,27 @@ class SuggestionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = KbColors.of(context);
-    // Pad/trim to exactly 3
+    final t = KbTheme.of(context);
     final words = List<String>.generate(
         3, (i) => i < suggestions.length ? suggestions[i] : '');
 
     return Container(
-      height: 40,
-      color: colors.suggestionBg,
+      height: 36,
+      color: t.bg,
       child: Row(
         children: [
-          _slot(context, words[0], center: false, colors: colors),
-          _divider(colors),
-          _slot(context, words[1], center: true,  colors: colors),
-          _divider(colors),
-          _slot(context, words[2], center: false, colors: colors),
+          _slot(context, words[0], center: false, t: t),
+          _divider(t),
+          _slot(context, words[1], center: true, t: t),
+          _divider(t),
+          _slot(context, words[2], center: false, t: t),
         ],
       ),
     );
   }
 
   Widget _slot(BuildContext ctx, String word,
-      {required bool center, required KbColors colors}) {
+      {required bool center, required KbTheme t}) {
     return Expanded(
       child: InkWell(
         onTap: word.isEmpty ? null : () => onTap(word),
@@ -47,7 +46,7 @@ class SuggestionBar extends StatelessWidget {
             style: TextStyle(
               fontSize: 14,
               fontWeight: center ? FontWeight.bold : FontWeight.normal,
-              color: center ? colors.suggestionText : colors.suggestionSide,
+              color: center ? t.keyText : t.spaceText,
             ),
           ),
         ),
@@ -55,8 +54,8 @@ class SuggestionBar extends StatelessWidget {
     );
   }
 
-  Widget _divider(KbColors colors) => SizedBox(
+  Widget _divider(KbTheme t) => SizedBox(
         height: 20,
-        child: VerticalDivider(width: 1, color: colors.divider),
+        child: VerticalDivider(width: 1, color: t.divider),
       );
 }

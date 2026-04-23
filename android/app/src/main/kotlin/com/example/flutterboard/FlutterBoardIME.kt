@@ -1,8 +1,6 @@
 package com.example.flutterboard
 
 import android.content.Context
-import android.inputmethodservice.InputMethodService
-import android.inputmethodservice.Keyboard
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -10,549 +8,274 @@ import android.os.VibratorManager
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
+import android.widget.FrameLayout
 import io.flutter.embedding.android.FlutterView
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.FlutterEngineCache
 import io.flutter.embedding.engine.dart.DartExecutor
-import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.EventChannel
+import io.flutter.plugin.common.MethodChannel
 
-/**
- * FlutterBoard Input Method Service
- * Provides a custom keyboard experience using Flutter UI integrated with Android IME
- */
-class FlutterBoardIME : InputMethodService() {
+class FlutterBoardIME : android.inputmethodservice.InputMethodService() {
 
     companion object {
-        const val ENGINE_ID = "flutterboard_ime_engine"
+        const val ENGINE_ID      = "ab_keyboard_engine"
         const val METHOD_CHANNEL = "com.flutterboard/keyboard"
-        const val EVENT_CHANNEL = "com.flutterboard/keyboard_events"
-        const val INPUT_CHANNEL = "com.flutterboard/input"
+        const val EVENT_CHANNEL  = "com.flutterboard/keyboard_events"
+        const val INPUT_CHANNEL  = "com.flutterboard/input"
     }
 
-    private var flutterView: FlutterView? = null
-    private var flutterEngine: FlutterEngine? = null
-    private var methodChannel: MethodChannel? = null
-    private var inputChannel: MethodChannel? = null
-    private var eventChannel: EventChannel? = null
-    private var eventSink: EventChannel.EventSink? = null
-    
-    // FIXED: Add container variable to prevent detach/reattach
-    private var container: android.widget.FrameLayout? = null
-
+    private var flutterEngine : FlutterEngine? = null
+    private var flutterView   : FlutterView?   = null
+    private var rootContainer : FrameLayout?   = null
+    private var methodChannel : MethodChannel? = null
+    private var inputChannel  : MethodChannel? = null
+    private var eventChannel  : EventChannel?  = null
+    private var eventSink     : EventChannel.EventSink? = null
     private var currentEditorInfo: EditorInfo? = null
-    private var lastComposingText: String = ""
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     override fun onCreate() {
         super.onCreate()
-        initializeFlutterEngine()
+        initEngine()
     }
 
-    /**
-     * Initialize Flutter Engine for IME
-     */
-    private fun initializeFlutterEngine() {
-        // Try to reuse cached engine for better performance
-        var engine = FlutterEngineCache.getInstance().get(ENGINE_ID)
-        
-        if (engine == null) {
-            engine = FlutterEngine(this)
-            engine.dartExecutor.executeDartEntrypoint(
-                DartExecutor.DartEntrypoint.createDefault()
-            )
-            FlutterEngineCache.getInstance().put(ENGINE_ID, engine)
-        }
-        
-        flutterEngine = engine
-        setupMethodChannels()
-    }
+    // CRITICAL: Always false — fullscreen mode causes blank white screen
+    override fun isFullscreenMode(): Boolean = false
 
-    /**
-     * Setup bidirectional communication channels between Kotlin and Dart
-     */
-    private fun setupMethodChannels() {
-        val messenger = flutterEngine?.dartExecutor?.binaryMessenger ?: return
-
-        // Main method channel for keyboard operations
-        methodChannel = MethodChannel(messenger, METHOD_CHANNEL).apply {
-            setMethodCallHandler { call, result ->
-                handleMethodCall(call, result)
-            }
-        }
-
-        // Event channel for sending events to Flutter
-        eventChannel = EventChannel(messenger, EVENT_CHANNEL).apply {
-            setStreamHandler(object : EventChannel.StreamHandler {
-                override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
-                    eventSink = events
-                }
-
-                override fun onCancel(arguments: Any?) {
-                    eventSink = null
-                }
-            })
-        }
-
-        // Input channel for text and clipboard operations
-        inputChannel = MethodChannel(messenger, INPUT_CHANNEL).apply {
-            setMethodCallHandler { call, result ->
-                handleInputCall(call, result)
-            }
-        }
-    }
-
-    /**
-     * Handle method calls from Flutter
-     */
-    private fun handleMethodCall(call: io.flutter.plugin.common.MethodCall, result: io.flutter.plugin.common.MethodChannel.Result) {
-        when (call.method) {
-            "commitText" -> {
-                val text = call.argument<String>("text") ?: ""
-                commitText(text)
-                result.success(null)
-            }
-
-            "deleteBackward" -> {
-                deleteBackward()
-                result.success(null)
-            }
-
-            "deleteForward" -> {
-                deleteForward()
-                result.success(null)
-            }
-
-            "commitAction" -> {
-                val action = call.argument<String>("action") ?: "done"
-                performEditorAction(action)
-                result.success(null)
-            }
-
-            "hideKeyboard" -> {
-                requestHideSelf(0)
-                result.success(null)
-            }
-
-            "vibrate" -> {
-                val duration = call.argument<Int>("duration") ?: 30
-                val strength = call.argument<Int>("strength") ?: 128
-                performHapticFeedback(duration, strength)
-                result.success(null)
-            }
-
-            "getSelectedText" -> {
-                val text = getSelectedText()
-                result.success(text)
-            }
-
-            "moveCursor" -> {
-                val offset = call.argument<Int>("offset") ?: 0
-                moveCursor(offset)
-                result.success(null)
-            }
-
-            "selectAll" -> {
-                selectAll()
-                result.success(null)
-            }
-
-            "commitComposingText" -> {
-                val text = call.argument<String>("text") ?: ""
-                commitComposingText(text)
-                result.success(null)
-            }
-
-            "setComposingText" -> {
-                val text = call.argument<String>("text") ?: ""
-                setComposingText(text)
-                lastComposingText = text
-                result.success(null)
-            }
-
-            "finishComposing" -> {
-                finishComposing()
-                result.success(null)
-            }
-
-            "getEditorInfo" -> {
-                result.success(getEditorInfoMap())
-            }
-
-            "switchToPreviousInputMethod" -> {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    switchToPreviousInputMethod()
-                }
-                result.success(null)
-            }
-
-            "showInputMethodPicker" -> {
-                val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
-                imm?.showInputMethodPicker()
-                result.success(null)
-            }
-
-            "isKeyboardMode" -> {
-                // Called from main.dart to determine if running as IME
-                result.success(true)
-            }
-
-            "setKeyboardHeight" -> {
-                val heightPx = call.argument<Int>("height") ?: 300
-                setKeyboardHeight(heightPx)
-                result.success(null)
-            }
-
-            else -> result.notImplemented()
-        }
-    }
-
-    /**
-     * Handle input-related method calls
-     */
-    private fun handleInputCall(call: io.flutter.plugin.common.MethodCall, result: io.flutter.plugin.common.MethodChannel.Result) {
-        when (call.method) {
-            "getClipboardText" -> {
-                val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-                val text = try {
-                    clipboard?.primaryClip?.getItemAt(0)?.coerceToText(this)?.toString()
-                } catch (e: Exception) {
-                    null
-                }
-                result.success(text)
-            }
-
-            "setClipboardText" -> {
-                val text = call.argument<String>("text") ?: ""
-                val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-                val clip = android.content.ClipData.newPlainText("FlutterBoard", text)
-                clipboard?.setPrimaryClip(clip)
-                result.success(null)
-            }
-
-            "getSurroundingText" -> {
-                val before = call.argument<Int>("before") ?: 50
-                val after = call.argument<Int>("after") ?: 50
-                val ic = currentInputConnection
-                val textBefore = try {
-                    ic?.getTextBeforeCursor(before, 0)?.toString() ?: ""
-                } catch (e: Exception) {
-                    ""
-                }
-                val textAfter = try {
-                    ic?.getTextAfterCursor(after, 0)?.toString() ?: ""
-                } catch (e: Exception) {
-                    ""
-                }
-                result.success(mapOf("before" to textBefore, "after" to textAfter))
-            }
-
-            "getImeState" -> {
-                result.success(mapOf(
-                    "isEnabled" to true,
-                    "currentInputConnection" to (currentInputConnection != null),
-                    "editorInfo" to getEditorInfoMap()
-                ))
-            }
-
-            else -> result.notImplemented()
-        }
-    }
-
-    /**
-     * Create the input view (Flutter keyboard UI)
-     * CRITICAL: Must return WRAP_CONTENT height to prevent fullscreen takeover
-     * FIXED: Do NOT detach/reattach FlutterView - causes blank screen
-     */
     override fun onCreateInputView(): View {
-        // FIXED: Only create FlutterView once, reuse it
+        if (flutterEngine == null) initEngine()
+
+        // Create FlutterView once and reuse — never detach/reattach
         if (flutterView == null) {
             flutterView = FlutterView(this).apply {
                 attachToFlutterEngine(flutterEngine!!)
             }
         }
 
-        // FIXED: Reuse container if it exists
-        if (container == null) {
-            container = android.widget.FrameLayout(this)
-            
-            // CRITICAL: WRAP_CONTENT height ensures keyboard doesn't cover entire screen
-            // Use WindowManager.LayoutParams for proper IME behavior
-            val imeParams = android.view.WindowManager.LayoutParams().apply {
-                width = android.view.WindowManager.LayoutParams.MATCH_PARENT
-                height = android.view.WindowManager.LayoutParams.WRAP_CONTENT
-                gravity = android.view.Gravity.BOTTOM
-                flags = android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                        android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
-                type = android.view.WindowManager.LayoutParams.TYPE_INPUT_METHOD
+        // Create container once and reuse
+        // WRAP_CONTENT on both dimensions — Flutter dictates the height
+        // via its widget tree. This prevents the black gap below the keyboard.
+        if (rootContainer == null) {
+            rootContainer = FrameLayout(this).apply {
+                layoutParams = FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.WRAP_CONTENT
+                )
+                addView(
+                    flutterView,
+                    FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.WRAP_CONTENT
+                    )
+                )
             }
-            container!!.layoutParams = imeParams
-            
-            container!!.addView(flutterView, android.widget.FrameLayout.LayoutParams(
-                android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
-                android.widget.FrameLayout.LayoutParams.WRAP_CONTENT
-            ))
         }
 
-        // Notify Flutter that keyboard view is created
-        methodChannel?.invokeMethod("onKeyboardCreated", null)
-
-        return container!!
+        return rootContainer!!
     }
 
-    /**
-     * Called when the input view is starting to be shown
-     */
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
         currentEditorInfo = info
-
-        // Notify Flutter
-        val editorInfo = getEditorInfoMap()
-        methodChannel?.invokeMethod("onStartInput", editorInfo)
-
-        // Send event
-        eventSink?.success(mapOf(
-            "type" to "startInput",
-            "editorInfo" to editorInfo
-        ))
+        val map = editorInfoMap()
+        methodChannel?.invokeMethod("onStartInput", map)
+        eventSink?.success(mapOf("type" to "startInput", "editorInfo" to map))
     }
 
-    /**
-     * Called when the input view is finishing
-     */
     override fun onFinishInputView(finishingInput: Boolean) {
         super.onFinishInputView(finishingInput)
         methodChannel?.invokeMethod("onFinishInput", null)
-        eventSink?.success(mapOf("type" to "finishInput"))
     }
 
-    /**
-     * Called when the selection has changed
-     */
     override fun onUpdateSelection(
         oldSelStart: Int, oldSelEnd: Int,
         newSelStart: Int, newSelEnd: Int,
         candidatesStart: Int, candidatesEnd: Int
     ) {
-        super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd)
+        super.onUpdateSelection(
+            oldSelStart, oldSelEnd, newSelStart, newSelEnd,
+            candidatesStart, candidatesEnd
+        )
         eventSink?.success(mapOf(
             "type" to "selectionUpdate",
-            "oldSelStart" to oldSelStart,
-            "oldSelEnd" to oldSelEnd,
             "newSelStart" to newSelStart,
             "newSelEnd" to newSelEnd
         ))
     }
 
-    /**
-     * FIXED: Disable fullscreen mode to prevent blank screen on small displays
-     * Fullscreen mode causes layout recalculation and blank flashes
-     */
-    override fun isFullscreenMode(): Boolean {
-        // FIXED: Always return false to prevent fullscreen takeover
-        return false
+    // Do NOT destroy the engine or detach the view — causes blank on next show
+    override fun onDestroy() {
+        super.onDestroy()
     }
 
-    // ====== Text Operations ======
+    // ── Engine ────────────────────────────────────────────────────────────────
 
-    /**
-     * Commit text to the current input connection
-     */
+    private fun initEngine() {
+        var engine = FlutterEngineCache.getInstance().get(ENGINE_ID)
+        if (engine == null) {
+            engine = FlutterEngine(this)
+            // Use default entry point → calls main() in lib/main.dart
+            engine.dartExecutor.executeDartEntrypoint(
+                DartExecutor.DartEntrypoint.createDefault()
+            )
+            FlutterEngineCache.getInstance().put(ENGINE_ID, engine)
+        }
+        flutterEngine = engine
+        setupChannels()
+    }
+
+    private fun setupChannels() {
+        val messenger = flutterEngine?.dartExecutor?.binaryMessenger ?: return
+
+        methodChannel = MethodChannel(messenger, METHOD_CHANNEL).apply {
+            setMethodCallHandler { call, result -> handleMethod(call, result) }
+        }
+        eventChannel = EventChannel(messenger, EVENT_CHANNEL).apply {
+            setStreamHandler(object : EventChannel.StreamHandler {
+                override fun onListen(a: Any?, s: EventChannel.EventSink?) { eventSink = s }
+                override fun onCancel(a: Any?) { eventSink = null }
+            })
+        }
+        inputChannel = MethodChannel(messenger, INPUT_CHANNEL).apply {
+            setMethodCallHandler { call, result -> handleInput(call, result) }
+        }
+    }
+
+    // ── Method handlers ───────────────────────────────────────────────────────
+
+    private fun handleMethod(
+        call: io.flutter.plugin.common.MethodCall,
+        result: MethodChannel.Result
+    ) {
+        when (call.method) {
+            "commitText"    -> { commitText(call.argument<String>("text") ?: ""); result.success(null) }
+            "deleteBackward"-> { deleteBackward(); result.success(null) }
+            "deleteForward" -> { currentInputConnection?.deleteSurroundingText(0, 1); result.success(null) }
+            "commitAction"  -> { performAction(call.argument<String>("action") ?: "done"); result.success(null) }
+            "hideKeyboard"  -> { requestHideSelf(0); result.success(null) }
+            "vibrate"       -> {
+                vibrate(call.argument<Int>("duration") ?: 30, call.argument<Int>("strength") ?: 128)
+                result.success(null)
+            }
+            "getSelectedText"   -> result.success(currentInputConnection?.getSelectedText(0)?.toString())
+            "moveCursor"        -> { moveCursor(call.argument<Int>("offset") ?: 0); result.success(null) }
+            "selectAll"         -> { currentInputConnection?.performContextMenuAction(android.R.id.selectAll); result.success(null) }
+            "setComposingText"  -> { currentInputConnection?.setComposingText(call.argument<String>("text") ?: "", 1); result.success(null) }
+            "finishComposing"   -> { currentInputConnection?.finishComposingText(); result.success(null) }
+            "getEditorInfo"     -> result.success(editorInfoMap())
+            "isKeyboardMode"    -> result.success(true)
+            "setKeyboardHeight" -> result.success(null)
+            "switchToPreviousInputMethod" -> {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) switchToPreviousInputMethod()
+                result.success(null)
+            }
+            "showInputMethodPicker" -> {
+                (getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)
+                    ?.showInputMethodPicker()
+                result.success(null)
+            }
+            else -> result.notImplemented()
+        }
+    }
+
+    private fun handleInput(
+        call: io.flutter.plugin.common.MethodCall,
+        result: MethodChannel.Result
+    ) {
+        when (call.method) {
+            "getClipboardText" -> {
+                val cb = getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                result.success(
+                    try { cb?.primaryClip?.getItemAt(0)?.coerceToText(this)?.toString() }
+                    catch (_: Exception) { null }
+                )
+            }
+            "setClipboardText" -> {
+                val cb = getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                cb?.setPrimaryClip(
+                    android.content.ClipData.newPlainText(
+                        "AB Keyboard", call.argument<String>("text") ?: ""
+                    )
+                )
+                result.success(null)
+            }
+            "getSurroundingText" -> {
+                val ic = currentInputConnection
+                result.success(mapOf(
+                    "before" to (ic?.getTextBeforeCursor(50, 0)?.toString() ?: ""),
+                    "after"  to (ic?.getTextAfterCursor(50, 0)?.toString()  ?: "")
+                ))
+            }
+            else -> result.notImplemented()
+        }
+    }
+
+    // ── Text helpers ──────────────────────────────────────────────────────────
+
     private fun commitText(text: String) {
         currentInputConnection?.commitText(text, 1)
     }
 
-    /**
-     * Delete previous character
-     */
     private fun deleteBackward() {
         val ic = currentInputConnection ?: return
-        try {
-            val selectedText = ic.getSelectedText(0)
-            if (selectedText != null && selectedText.isNotEmpty()) {
-                ic.commitText("", 1)
-            } else {
-                ic.deleteSurroundingText(1, 0)
-            }
-        } catch (e: Exception) {
-            ic.deleteSurroundingText(1, 0)
-        }
+        val sel = try { ic.getSelectedText(0) } catch (_: Exception) { null }
+        if (!sel.isNullOrEmpty()) ic.commitText("", 1)
+        else ic.deleteSurroundingText(1, 0)
     }
 
-    /**
-     * Delete next character
-     */
-    private fun deleteForward() {
-        currentInputConnection?.deleteSurroundingText(0, 1)
-    }
-
-    /**
-     * Move cursor by offset
-     */
     private fun moveCursor(offset: Int) {
         val ic = currentInputConnection ?: return
         try {
-            val extracted = ic.getExtractedText(
-                android.view.inputmethod.ExtractedTextRequest(),
-                0
-            )
-            if (extracted != null) {
-                val newPos = (extracted.selectionStart + offset).coerceIn(
-                    0,
-                    extracted.text.length
-                )
-                ic.setSelection(newPos, newPos)
-            }
-        } catch (e: Exception) {
-            // Silently handle exceptions
-        }
+            val ex = ic.getExtractedText(android.view.inputmethod.ExtractedTextRequest(), 0) ?: return
+            val pos = (ex.selectionStart + offset).coerceIn(0, ex.text.length)
+            ic.setSelection(pos, pos)
+        } catch (_: Exception) {}
     }
 
-    /**
-     * Select all text in the input field
-     */
-    private fun selectAll() {
-        currentInputConnection?.performContextMenuAction(android.R.id.selectAll)
-    }
-
-    /**
-     * Get currently selected text
-     */
-    private fun getSelectedText(): String? {
-        return try {
-            currentInputConnection?.getSelectedText(0)?.toString()
-        } catch (e: Exception) {
-            null
-        }
-    }
-
-    /**
-     * Set composing text (for text suggestions/predictions)
-     */
-    private fun setComposingText(text: String) {
-        currentInputConnection?.setComposingText(text, 1)
-    }
-
-    /**
-     * Commit composing text
-     */
-    private fun commitComposingText(text: String) {
-        currentInputConnection?.commitText(text, 1)
-    }
-
-    /**
-     * Finish composing text
-     */
-    private fun finishComposing() {
-        currentInputConnection?.finishComposingText()
-    }
-
-    /**
-     * Perform editor action (done, go, search, etc.)
-     */
-    private fun performEditorAction(action: String) {
-        val actionCode = when (action) {
-            "done" -> EditorInfo.IME_ACTION_DONE
-            "go" -> EditorInfo.IME_ACTION_GO
-            "search" -> EditorInfo.IME_ACTION_SEARCH
-            "send" -> EditorInfo.IME_ACTION_SEND
-            "next" -> EditorInfo.IME_ACTION_NEXT
+    private fun performAction(action: String) {
+        val code = when (action) {
+            "done"     -> EditorInfo.IME_ACTION_DONE
+            "go"       -> EditorInfo.IME_ACTION_GO
+            "search"   -> EditorInfo.IME_ACTION_SEARCH
+            "send"     -> EditorInfo.IME_ACTION_SEND
+            "next"     -> EditorInfo.IME_ACTION_NEXT
             "previous" -> EditorInfo.IME_ACTION_PREVIOUS
-            "newline" -> EditorInfo.IME_ACTION_NONE
-            else -> EditorInfo.IME_ACTION_DONE
+            else       -> EditorInfo.IME_ACTION_DONE
         }
-
-        if (actionCode == EditorInfo.IME_ACTION_NONE) {
-            commitText("\n")
-        } else {
-            currentInputConnection?.performEditorAction(actionCode)
-        }
+        currentInputConnection?.performEditorAction(code)
     }
 
-    /**
-     * Provide haptic feedback (vibration)
-     */
-    private fun performHapticFeedback(durationMs: Int, strength: Int) {
+    private fun vibrate(durationMs: Int, strength: Int) {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val vibratorManager = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
-                val vibrator = vibratorManager?.defaultVibrator
-                vibrator?.vibrate(
-                    VibrationEffect.createOneShot(
-                        durationMs.toLong(),
-                        strength.coerceIn(1, 255)
-                    )
-                )
+                (getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager)
+                    ?.defaultVibrator
+                    ?.vibrate(VibrationEffect.createOneShot(durationMs.toLong(), strength.coerceIn(1, 255)))
             } else {
                 @Suppress("DEPRECATION")
-                val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    vibrator?.vibrate(
-                        VibrationEffect.createOneShot(
-                            durationMs.toLong(),
-                            strength.coerceIn(1, 255)
-                        )
-                    )
-                } else {
-                    @Suppress("DEPRECATION")
-                    vibrator?.vibrate(durationMs.toLong())
+                (getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator)?.let { v ->
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                        v.vibrate(VibrationEffect.createOneShot(durationMs.toLong(), strength.coerceIn(1, 255)))
+                    else
+                        @Suppress("DEPRECATION") v.vibrate(durationMs.toLong())
                 }
             }
-        } catch (e: Exception) {
-            // Silently fail if vibration is not available
-        }
+        } catch (_: Exception) {}
     }
 
-    /**
-     * Get current editor info as a map
-     */
-    private fun getEditorInfoMap(): Map<String, Any?> {
+    private fun editorInfoMap(): Map<String, Any?> {
         val info = currentEditorInfo ?: return emptyMap()
         return mapOf(
-            "inputType" to info.inputType,
-            "imeOptions" to info.imeOptions,
-            "packageName" to info.packageName,
-            "fieldId" to info.fieldId,
-            "hintText" to info.hintText?.toString(),
-            "label" to info.label?.toString(),
-            "actionLabel" to info.actionLabel?.toString(),
-            "actionId" to info.actionId,
-            "fieldName" to info.fieldName,
+            "inputType"       to info.inputType,
+            "imeOptions"      to info.imeOptions,
+            "packageName"     to info.packageName,
+            "hintText"        to info.hintText?.toString(),
+            "actionLabel"     to info.actionLabel?.toString(),
+            "actionId"        to info.actionId,
             "initialSelStart" to info.initialSelStart,
-            "initialSelEnd" to info.initialSelEnd
+            "initialSelEnd"   to info.initialSelEnd
         )
-    }
-
-    /**
-     * Cleanup on destroy
-     */
-    override fun onDestroy() {
-        try {
-            flutterView?.detachFromFlutterEngine()
-        } catch (e: Exception) {
-            // Silently handle cleanup errors
-        }
-        super.onDestroy()
-    }
-
-    /**
-     * Set keyboard height dynamically (called from Flutter settings)
-     * Height is in pixels
-     */
-    fun setKeyboardHeight(heightPx: Int) {
-        flutterView?.layoutParams?.apply {
-            height = heightPx
-        }
-    }
-
-    /**
-     * Ensure keyboard doesn't take fullscreen
-     * Called after view is created
-     */
-    private fun ensureProperKeyboardBehavior() {
-        // Request that the keyboard be shown at the bottom
-        // This prevents fullscreen takeover
-        // Note: window is not available in InputMethodService
-        // The proper behavior is ensured through LayoutParams
     }
 }

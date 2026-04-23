@@ -78,13 +78,6 @@
                 android:resource="@xml/method" />
         </service>
         
-        <!-- ==================== ADDITIONAL SERVICES ==================== -->
-        <!-- Additional service for Kotlin InputMethodService bridge (if needed) -->
-        <service
-            android:name=".InputMethodService"
-            android:exported="false"
-            android:enabled="true" />
-        
         <!-- ==================== META DATA ==================== -->
         <!-- Flutter Embedding Version (always set to 2 for current Flutter) -->
         <meta-data
