@@ -1,281 +1,270 @@
 package com.example.flutterboard
 
-import android.content.Context
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.content.res.Configuration
+import android.inputmethodservice.InputMethodService
 import android.os.Build
-import android.os.VibrationEffect
-import android.os.Vibrator
-import android.os.VibratorManager
+import android.os.Handler
+import android.os.Looper
+import android.util.TypedValue
 import android.view.View
+import android.view.ViewGroup
+import android.view.WindowInsets
 import android.view.inputmethod.EditorInfo
-import android.view.inputmethod.InputMethodManager
 import android.widget.FrameLayout
-import io.flutter.embedding.android.FlutterView
-import io.flutter.embedding.engine.FlutterEngine
-import io.flutter.embedding.engine.FlutterEngineCache
-import io.flutter.embedding.engine.dart.DartExecutor
-import io.flutter.plugin.common.EventChannel
-import io.flutter.plugin.common.MethodChannel
+import android.widget.LinearLayout
 
-class FlutterBoardIME : android.inputmethodservice.InputMethodService() {
+class FlutterBoardIME : InputMethodService() {
 
-    companion object {
-        const val ENGINE_ID      = "ab_keyboard_engine"
-        const val METHOD_CHANNEL = "com.flutterboard/keyboard"
-        const val EVENT_CHANNEL  = "com.flutterboard/keyboard_events"
-        const val INPUT_CHANNEL  = "com.flutterboard/input"
-    }
+    private val st = KeyboardState()
+    private lateinit var t: KeyboardTheme
+    private lateinit var d: Dims
 
-    private var flutterEngine : FlutterEngine? = null
-    private var flutterView   : FlutterView?   = null
-    private var rootContainer : FrameLayout?   = null
-    private var methodChannel : MethodChannel? = null
-    private var inputChannel  : MethodChannel? = null
-    private var eventChannel  : EventChannel?  = null
-    private var eventSink     : EventChannel.EventSink? = null
-    private var currentEditorInfo: EditorInfo? = null
+    private val idleH = Handler(Looper.getMainLooper())
+    private val idleR = Runnable { setTyping(false) }
 
-    // ── Lifecycle ─────────────────────────────────────────────────────────────
+    private var root    : LinearLayout?      = null
+    private var topFrame: FrameLayout?       = null
+    private var toolbar : ToolbarView?       = null
+    private var suggest : SuggestionBarView? = null
+    private var rows    : LinearLayout?      = null
 
-    override fun onCreate() {
-        super.onCreate()
-        initEngine()
-    }
+    // ── IME ───────────────────────────────────────────────────────────────────
 
-    // CRITICAL: Always false — fullscreen mode causes blank white screen
     override fun isFullscreenMode(): Boolean = false
 
     override fun onCreateInputView(): View {
-        if (flutterEngine == null) initEngine()
-
-        // Create FlutterView once and reuse — never detach/reattach
-        if (flutterView == null) {
-            flutterView = FlutterView(this).apply {
-                attachToFlutterEngine(flutterEngine!!)
-            }
-        }
-
-        // Create container once and reuse
-        // WRAP_CONTENT on both dimensions — Flutter dictates the height
-        // via its widget tree. This prevents the black gap below the keyboard.
-        if (rootContainer == null) {
-            rootContainer = FrameLayout(this).apply {
-                layoutParams = FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.MATCH_PARENT,
-                    FrameLayout.LayoutParams.WRAP_CONTENT
-                )
-                addView(
-                    flutterView,
-                    FrameLayout.LayoutParams(
-                        FrameLayout.LayoutParams.MATCH_PARENT,
-                        FrameLayout.LayoutParams.WRAP_CONTENT
-                    )
-                )
-            }
-        }
-
-        return rootContainer!!
+        t = KeyboardTheme.resolve(this)
+        d = computeDims()
+        buildRoot()
+        return root!!
     }
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
-        currentEditorInfo = info
-        val map = editorInfoMap()
-        methodChannel?.invokeMethod("onStartInput", map)
-        eventSink?.success(mapOf("type" to "startInput", "editorInfo" to map))
+        if (!restarting) {
+            st.shift  = KeyboardState.Shift.OFF
+            st.layout = KeyboardState.Layout.QWERTY
+            setTyping(false)
+        }
+        rebuild()
     }
 
-    override fun onFinishInputView(finishingInput: Boolean) {
-        super.onFinishInputView(finishingInput)
-        methodChannel?.invokeMethod("onFinishInput", null)
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        t = KeyboardTheme.resolve(this)
+        d = computeDims()
+        buildRoot()
     }
 
-    override fun onUpdateSelection(
-        oldSelStart: Int, oldSelEnd: Int,
-        newSelStart: Int, newSelEnd: Int,
-        candidatesStart: Int, candidatesEnd: Int
-    ) {
-        super.onUpdateSelection(
-            oldSelStart, oldSelEnd, newSelStart, newSelEnd,
-            candidatesStart, candidatesEnd
-        )
-        eventSink?.success(mapOf(
-            "type" to "selectionUpdate",
-            "newSelStart" to newSelStart,
-            "newSelEnd" to newSelEnd
-        ))
-    }
-
-    // Do NOT destroy the engine or detach the view — causes blank on next show
     override fun onDestroy() {
+        idleH.removeCallbacks(idleR)
         super.onDestroy()
     }
 
-    // ── Engine ────────────────────────────────────────────────────────────────
+    // ── Dimensions ────────────────────────────────────────────────────────────
 
-    private fun initEngine() {
-        var engine = FlutterEngineCache.getInstance().get(ENGINE_ID)
-        if (engine == null) {
-            engine = FlutterEngine(this)
-            // Use default entry point → calls main() in lib/main.dart
-            engine.dartExecutor.executeDartEntrypoint(
-                DartExecutor.DartEntrypoint.createDefault()
-            )
-            FlutterEngineCache.getInstance().put(ENGINE_ID, engine)
-        }
-        flutterEngine = engine
-        setupChannels()
+    private fun computeDims(): Dims {
+        // Try to get accurate nav bar height from window insets
+        val navBar = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val h = window?.window?.decorView
+                ?.rootWindowInsets
+                ?.getInsets(WindowInsets.Type.navigationBars())?.bottom ?: 0
+            if (h > 0) h else fallbackNavBar()
+        } else fallbackNavBar()
+
+        val dm      = resources.displayMetrics
+        val screenH = dm.heightPixels
+        val screenW = dm.widthPixels
+        val isLand  = resources.configuration.orientation ==
+                Configuration.ORIENTATION_LANDSCAPE
+
+        fun dp(v: Int) = TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), dm).toInt()
+
+        val toolbarH = dp(40)
+        val divider  = dp(1)
+        val numRowH  = dp(32)
+        val topPad   = dp(6)
+        val keyGap   = dp(6)
+        val rowGap   = dp(8)
+        val edgePad  = dp(8)
+        val botPad   = dp(20) + navBar   // increased: more space above nav bar arrow
+
+        val target   = (screenH * if (isLand) 0.50f else 0.37f).toInt()
+
+        // overhead = toolbar + divider + numRow + topPad
+        //          + (rowGap/2 after numRow) + 3*rowGap + botPad
+        val overhead = toolbarH + divider + numRowH + topPad +
+                (rowGap / 2) + (3 * rowGap) + botPad
+
+        // 4 rows: 3 letter + 1 bottom (bottomH = keyH + dp(6))
+        // target = overhead + 4*keyH + dp(6)
+        val keyH    = ((target - overhead - dp(6)) / 4).coerceIn(dp(42), dp(54))
+        val bottomH = keyH + dp(6)
+
+        return Dims(
+            toolbarH = toolbarH,
+            numRowH  = numRowH,
+            keyH     = keyH,
+            bottomH  = bottomH,
+            keyGap   = keyGap,
+            rowGap   = rowGap,
+            edgePad  = edgePad,
+            topPad   = topPad,
+            botPad   = botPad,
+            radius   = dp(8).toFloat(),
+            navBarPx = navBar,
+            screenW  = screenW,
+        )
     }
 
-    private fun setupChannels() {
-        val messenger = flutterEngine?.dartExecutor?.binaryMessenger ?: return
-
-        methodChannel = MethodChannel(messenger, METHOD_CHANNEL).apply {
-            setMethodCallHandler { call, result -> handleMethod(call, result) }
-        }
-        eventChannel = EventChannel(messenger, EVENT_CHANNEL).apply {
-            setStreamHandler(object : EventChannel.StreamHandler {
-                override fun onListen(a: Any?, s: EventChannel.EventSink?) { eventSink = s }
-                override fun onCancel(a: Any?) { eventSink = null }
-            })
-        }
-        inputChannel = MethodChannel(messenger, INPUT_CHANNEL).apply {
-            setMethodCallHandler { call, result -> handleInput(call, result) }
-        }
+    private fun fallbackNavBar(): Int {
+        val id = resources.getIdentifier("navigation_bar_height", "dimen", "android")
+        return if (id > 0) resources.getDimensionPixelSize(id) else 0
     }
 
-    // ── Method handlers ───────────────────────────────────────────────────────
+    // ── Build ─────────────────────────────────────────────────────────────────
 
-    private fun handleMethod(
-        call: io.flutter.plugin.common.MethodCall,
-        result: MethodChannel.Result
-    ) {
-        when (call.method) {
-            "commitText"    -> { commitText(call.argument<String>("text") ?: ""); result.success(null) }
-            "deleteBackward"-> { deleteBackward(); result.success(null) }
-            "deleteForward" -> { currentInputConnection?.deleteSurroundingText(0, 1); result.success(null) }
-            "commitAction"  -> { performAction(call.argument<String>("action") ?: "done"); result.success(null) }
-            "hideKeyboard"  -> { requestHideSelf(0); result.success(null) }
-            "vibrate"       -> {
-                vibrate(call.argument<Int>("duration") ?: 30, call.argument<Int>("strength") ?: 128)
-                result.success(null)
-            }
-            "getSelectedText"   -> result.success(currentInputConnection?.getSelectedText(0)?.toString())
-            "moveCursor"        -> { moveCursor(call.argument<Int>("offset") ?: 0); result.success(null) }
-            "selectAll"         -> { currentInputConnection?.performContextMenuAction(android.R.id.selectAll); result.success(null) }
-            "setComposingText"  -> { currentInputConnection?.setComposingText(call.argument<String>("text") ?: "", 1); result.success(null) }
-            "finishComposing"   -> { currentInputConnection?.finishComposingText(); result.success(null) }
-            "getEditorInfo"     -> result.success(editorInfoMap())
-            "isKeyboardMode"    -> result.success(true)
-            "setKeyboardHeight" -> result.success(null)
-            "switchToPreviousInputMethod" -> {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) switchToPreviousInputMethod()
-                result.success(null)
-            }
-            "showInputMethodPicker" -> {
-                (getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)
-                    ?.showInputMethodPicker()
-                result.success(null)
-            }
-            else -> result.notImplemented()
+    private fun buildRoot() {
+        root = LinearLayout(this).apply {
+            orientation  = LinearLayout.VERTICAL
+            setBackgroundColor(t.bg)
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT)
         }
-    }
 
-    private fun handleInput(
-        call: io.flutter.plugin.common.MethodCall,
-        result: MethodChannel.Result
-    ) {
-        when (call.method) {
-            "getClipboardText" -> {
-                val cb = getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-                result.success(
-                    try { cb?.primaryClip?.getItemAt(0)?.coerceToText(this)?.toString() }
-                    catch (_: Exception) { null }
-                )
-            }
-            "setClipboardText" -> {
-                val cb = getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-                cb?.setPrimaryClip(
-                    android.content.ClipData.newPlainText(
-                        "AB Keyboard", call.argument<String>("text") ?: ""
-                    )
-                )
-                result.success(null)
-            }
-            "getSurroundingText" -> {
-                val ic = currentInputConnection
-                result.success(mapOf(
-                    "before" to (ic?.getTextBeforeCursor(50, 0)?.toString() ?: ""),
-                    "after"  to (ic?.getTextAfterCursor(50, 0)?.toString()  ?: "")
-                ))
-            }
-            else -> result.notImplemented()
+        // Top bar — toolbar and suggestion bar in a FrameLayout
+        topFrame = FrameLayout(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, d.toolbarH)
         }
+        toolbar = ToolbarView(this, t, d.toolbarH)
+        suggest = SuggestionBarView(this, t, d.toolbarH) { word ->
+            currentInputConnection?.commitText(word, 1)
+            onKey()
+        }
+        topFrame!!.addView(toolbar,
+            FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, d.toolbarH))
+        topFrame!!.addView(suggest,
+            FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, d.toolbarH))
+        suggest!!.alpha      = 0f
+        suggest!!.visibility = View.INVISIBLE
+        root!!.addView(topFrame)
+
+        // Divider
+        root!!.addView(View(this).apply {
+            setBackgroundColor(t.divider)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(1))
+        })
+
+        // Key rows
+        rows = LinearLayout(this).apply {
+            orientation  = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT)
+        }
+        root!!.addView(rows)
+
+        // Bottom spacer — clears nav bar
+        root!!.addView(View(this).apply {
+            setBackgroundColor(t.bg)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, d.botPad)
+        })
+
+        rebuild()
     }
 
-    // ── Text helpers ──────────────────────────────────────────────────────────
-
-    private fun commitText(text: String) {
-        currentInputConnection?.commitText(text, 1)
+    private fun rebuild() {
+        rows?.removeAllViews()
+        rows?.addView(
+            KeyRowBuilder(
+                ctx      = this,
+                t        = t,
+                st       = st,
+                d        = d,
+                onCommit = ::commit,
+                onBack   = ::backspace,
+                onEnter  = ::enter,
+                onShift  = { st.cycleShift(); rebuild() },
+                onNumbers= { st.layout = KeyboardState.Layout.NUMBERS; rebuild() },
+                onSymbols= { st.layout = KeyboardState.Layout.SYMBOLS; rebuild() },
+                onQwerty = { st.layout = KeyboardState.Layout.QWERTY;  rebuild() },
+                enterLbl = ::enterLabel,
+            ).build()
+        )
     }
 
-    private fun deleteBackward() {
-        val ic = currentInputConnection ?: return
+    // ── Typing state ──────────────────────────────────────────────────────────
+
+    private fun onKey() {
+        suggest?.next()
+        idleH.removeCallbacks(idleR)
+        if (!st.typing) setTyping(true)
+        idleH.postDelayed(idleR, 1500L)
+    }
+
+    private fun setTyping(on: Boolean) {
+        if (st.typing == on) return
+        st.typing = on
+        val show = if (on) suggest  else toolbar
+        val hide = if (on) toolbar  else suggest
+        show ?: return; hide ?: return
+        show.visibility = View.VISIBLE
+        show.animate().alpha(1f).setDuration(150).start()
+        hide.animate().alpha(0f).setDuration(150)
+            .setListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(a: Animator) {
+                    hide.visibility = View.INVISIBLE
+                }
+            }).start()
+    }
+
+    // ── Input ─────────────────────────────────────────────────────────────────
+
+    private fun commit(k: String) {
+        currentInputConnection?.commitText(st.applyShift(k), 1)
+        st.afterChar(); rebuild(); onKey()
+    }
+
+    private fun backspace() {
+        val ic  = currentInputConnection ?: return
         val sel = try { ic.getSelectedText(0) } catch (_: Exception) { null }
         if (!sel.isNullOrEmpty()) ic.commitText("", 1)
         else ic.deleteSurroundingText(1, 0)
+        onKey()
     }
 
-    private fun moveCursor(offset: Int) {
-        val ic = currentInputConnection ?: return
-        try {
-            val ex = ic.getExtractedText(android.view.inputmethod.ExtractedTextRequest(), 0) ?: return
-            val pos = (ex.selectionStart + offset).coerceIn(0, ex.text.length)
-            ic.setSelection(pos, pos)
-        } catch (_: Exception) {}
-    }
-
-    private fun performAction(action: String) {
-        val code = when (action) {
-            "done"     -> EditorInfo.IME_ACTION_DONE
-            "go"       -> EditorInfo.IME_ACTION_GO
-            "search"   -> EditorInfo.IME_ACTION_SEARCH
-            "send"     -> EditorInfo.IME_ACTION_SEND
-            "next"     -> EditorInfo.IME_ACTION_NEXT
-            "previous" -> EditorInfo.IME_ACTION_PREVIOUS
-            else       -> EditorInfo.IME_ACTION_DONE
-        }
-        currentInputConnection?.performEditorAction(code)
-    }
-
-    private fun vibrate(durationMs: Int, strength: Int) {
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                (getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager)
-                    ?.defaultVibrator
-                    ?.vibrate(VibrationEffect.createOneShot(durationMs.toLong(), strength.coerceIn(1, 255)))
-            } else {
-                @Suppress("DEPRECATION")
-                (getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator)?.let { v ->
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                        v.vibrate(VibrationEffect.createOneShot(durationMs.toLong(), strength.coerceIn(1, 255)))
-                    else
-                        @Suppress("DEPRECATION") v.vibrate(durationMs.toLong())
-                }
+    private fun enter() {
+        val ic   = currentInputConnection ?: return
+        val info = currentInputEditorInfo
+        if (info != null) {
+            val act = info.imeOptions and EditorInfo.IME_MASK_ACTION
+            if (act != EditorInfo.IME_ACTION_NONE &&
+                act != EditorInfo.IME_ACTION_UNSPECIFIED) {
+                ic.performEditorAction(act); onKey(); return
             }
-        } catch (_: Exception) {}
+        }
+        ic.commitText("\n", 1); onKey()
     }
 
-    private fun editorInfoMap(): Map<String, Any?> {
-        val info = currentEditorInfo ?: return emptyMap()
-        return mapOf(
-            "inputType"       to info.inputType,
-            "imeOptions"      to info.imeOptions,
-            "packageName"     to info.packageName,
-            "hintText"        to info.hintText?.toString(),
-            "actionLabel"     to info.actionLabel?.toString(),
-            "actionId"        to info.actionId,
-            "initialSelStart" to info.initialSelStart,
-            "initialSelEnd"   to info.initialSelEnd
-        )
+    private fun enterLabel(): String {
+        val info = currentInputEditorInfo ?: return "↵"
+        return when (info.imeOptions and EditorInfo.IME_MASK_ACTION) {
+            EditorInfo.IME_ACTION_SEARCH -> "🔍"
+            EditorInfo.IME_ACTION_SEND   -> "Send"
+            EditorInfo.IME_ACTION_GO     -> "Go"
+            EditorInfo.IME_ACTION_DONE   -> "Done"
+            EditorInfo.IME_ACTION_NEXT   -> "Next"
+            else                         -> "↵"
+        }
     }
+
+    private fun dp(v: Int) = TypedValue.applyDimension(
+        TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), resources.displayMetrics).toInt()
 }
