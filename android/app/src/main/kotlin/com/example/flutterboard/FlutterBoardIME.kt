@@ -1,7 +1,6 @@
 package com.example.flutterboard
 
-import android.animation.Animator
-import android.animation.AnimatorListenerAdapter
+import android.content.Context
 import android.content.res.Configuration
 import android.inputmethodservice.InputMethodService
 import android.os.Build
@@ -12,6 +11,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowInsets
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 
@@ -21,14 +21,17 @@ class FlutterBoardIME : InputMethodService() {
     private lateinit var t: KeyboardTheme
     private lateinit var d: Dims
 
+    // Suggestion bar hides after 1.5 s idle
     private val idleH = Handler(Looper.getMainLooper())
-    private val idleR = Runnable { setTyping(false) }
+    private val idleR = Runnable { hideSuggestion() }
 
-    private var root    : LinearLayout?      = null
-    private var topFrame: FrameLayout?       = null
-    private var toolbar : ToolbarView?       = null
-    private var suggest : SuggestionBarView? = null
-    private var rows    : LinearLayout?      = null
+    private var root        : LinearLayout?      = null
+    private var suggBar     : SuggestionBarView? = null   // above toolbar
+    private var toolbar     : ToolbarView?       = null   // always visible
+    private var rows        : LinearLayout?      = null
+    private var emojiPanel  : EmojiPanelView?    = null
+    private var emojiFrame  : FrameLayout?       = null   // overlays rows
+    private var showingEmoji: Boolean            = false
 
     // ── IME ───────────────────────────────────────────────────────────────────
 
@@ -46,9 +49,11 @@ class FlutterBoardIME : InputMethodService() {
         if (!restarting) {
             st.shift  = KeyboardState.Shift.OFF
             st.layout = KeyboardState.Layout.QWERTY
-            setTyping(false)
+            showingEmoji = false
         }
         rebuild()
+        hideEmoji()
+        hideSuggestion()
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -66,7 +71,6 @@ class FlutterBoardIME : InputMethodService() {
     // ── Dimensions ────────────────────────────────────────────────────────────
 
     private fun computeDims(): Dims {
-        // Try to get accurate nav bar height from window insets
         val navBar = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             val h = window?.window?.decorView
                 ?.rootWindowInsets
@@ -83,24 +87,18 @@ class FlutterBoardIME : InputMethodService() {
         fun dp(v: Int) = TypedValue.applyDimension(
             TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), dm).toInt()
 
-        val toolbarH = dp(40)
+        val toolbarH = dp(44)
         val divider  = dp(1)
-        val numRowH  = dp(32)
+        val numRowH  = dp(36)
         val topPad   = dp(6)
         val keyGap   = dp(6)
         val rowGap   = dp(8)
         val edgePad  = dp(8)
-        val botPad   = dp(20) + navBar   // increased: more space above nav bar arrow
+        val botPad   = dp(24) + navBar   // extra space above nav bar
 
-        val target   = (screenH * if (isLand) 0.50f else 0.37f).toInt()
-
-        // overhead = toolbar + divider + numRow + topPad
-        //          + (rowGap/2 after numRow) + 3*rowGap + botPad
+        val target   = (screenH * if (isLand) 0.50f else 0.38f).toInt()
         val overhead = toolbarH + divider + numRowH + topPad +
                 (rowGap / 2) + (3 * rowGap) + botPad
-
-        // 4 rows: 3 letter + 1 bottom (bottomH = keyH + dp(6))
-        // target = overhead + 4*keyH + dp(6)
         val keyH    = ((target - overhead - dp(6)) / 4).coerceIn(dp(42), dp(54))
         val bottomH = keyH + dp(6)
 
@@ -136,41 +134,59 @@ class FlutterBoardIME : InputMethodService() {
                 ViewGroup.LayoutParams.WRAP_CONTENT)
         }
 
-        // Top bar — toolbar and suggestion bar in a FrameLayout
-        topFrame = FrameLayout(this).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, d.toolbarH)
-        }
-        toolbar = ToolbarView(this, t, d.toolbarH)
-        suggest = SuggestionBarView(this, t, d.toolbarH) { word ->
+        // ── Suggestion bar (hidden by default, slides in when typing) ──────────
+        suggBar = SuggestionBarView(this, t, d.toolbarH) { word ->
             currentInputConnection?.commitText(word, 1)
             onKey()
+        }.also {
+            it.visibility = View.GONE
+            root!!.addView(it, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, d.toolbarH))
         }
-        topFrame!!.addView(toolbar,
-            FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, d.toolbarH))
-        topFrame!!.addView(suggest,
-            FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, d.toolbarH))
-        suggest!!.alpha      = 0f
-        suggest!!.visibility = View.INVISIBLE
-        root!!.addView(topFrame)
 
-        // Divider
+        // ── Toolbar — ALWAYS visible ───────────────────────────────────────────
+        toolbar = ToolbarView(this, t, d.toolbarH, onEmoji = { toggleEmoji() })
+        root!!.addView(toolbar, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, d.toolbarH))
+
+        // ── Divider ───────────────────────────────────────────────────────────
         root!!.addView(View(this).apply {
             setBackgroundColor(t.divider)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, dp(1))
         })
 
-        // Key rows
-        rows = LinearLayout(this).apply {
-            orientation  = LinearLayout.VERTICAL
+        // ── Key rows + emoji panel stacked in a FrameLayout ───────────────────
+        emojiFrame = FrameLayout(this).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT)
         }
-        root!!.addView(rows)
 
-        // Bottom spacer — clears nav bar
+        rows = LinearLayout(this).apply {
+            orientation  = LinearLayout.VERTICAL
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT)
+        }
+        emojiFrame!!.addView(rows)
+
+        // Emoji panel (hidden by default)
+        emojiPanel = EmojiPanelView(
+            ctx     = this,
+            t       = t,
+            onEmoji = { emoji -> commit(emoji) },
+            onBack  = { hideEmoji() },
+        ).also {
+            it.visibility = View.GONE
+            emojiFrame!!.addView(it, FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT))
+        }
+
+        root!!.addView(emojiFrame)
+
+        // ── Bottom spacer ─────────────────────────────────────────────────────
         root!!.addView(View(this).apply {
             setBackgroundColor(t.bg)
             layoutParams = LinearLayout.LayoutParams(
@@ -196,33 +212,51 @@ class FlutterBoardIME : InputMethodService() {
                 onSymbols= { st.layout = KeyboardState.Layout.SYMBOLS; rebuild() },
                 onQwerty = { st.layout = KeyboardState.Layout.QWERTY;  rebuild() },
                 enterLbl = ::enterLabel,
+                onSpaceLongPress = ::showImePickerFromSpace,
             ).build()
         )
     }
 
-    // ── Typing state ──────────────────────────────────────────────────────────
+    // ── Emoji panel ───────────────────────────────────────────────────────────
+
+    private fun toggleEmoji() {
+        if (showingEmoji) hideEmoji() else showEmoji()
+    }
+
+    private fun showEmoji() {
+        showingEmoji = true
+        rows?.visibility       = View.INVISIBLE
+        emojiPanel?.visibility = View.VISIBLE
+    }
+
+    private fun hideEmoji() {
+        showingEmoji = false
+        emojiPanel?.visibility = View.GONE
+        rows?.visibility       = View.VISIBLE
+    }
+
+    // ── Suggestion bar ────────────────────────────────────────────────────────
 
     private fun onKey() {
-        suggest?.next()
+        suggBar?.next()
         idleH.removeCallbacks(idleR)
-        if (!st.typing) setTyping(true)
+        showSuggestion()
         idleH.postDelayed(idleR, 1500L)
     }
 
-    private fun setTyping(on: Boolean) {
-        if (st.typing == on) return
-        st.typing = on
-        val show = if (on) suggest  else toolbar
-        val hide = if (on) toolbar  else suggest
-        show ?: return; hide ?: return
-        show.visibility = View.VISIBLE
-        show.animate().alpha(1f).setDuration(150).start()
-        hide.animate().alpha(0f).setDuration(150)
-            .setListener(object : AnimatorListenerAdapter() {
-                override fun onAnimationEnd(a: Animator) {
-                    hide.visibility = View.INVISIBLE
-                }
-            }).start()
+    private fun showSuggestion() {
+        suggBar?.visibility = View.VISIBLE
+    }
+
+    private fun hideSuggestion() {
+        suggBar?.visibility = View.GONE
+    }
+
+    // ── Space long-press → IME picker ─────────────────────────────────────────
+
+    private fun showImePickerFromSpace() {
+        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+        imm?.showInputMethodPicker()
     }
 
     // ── Input ─────────────────────────────────────────────────────────────────

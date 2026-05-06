@@ -11,74 +11,71 @@ import android.widget.LinearLayout
 import android.widget.TextView
 
 /**
- * Samsung-style toolbar.
- * Dark mode: circular icon buttons with subtle border ring.
- * Light mode: flat icon buttons, no circle bg.
+ * Samsung-style toolbar — 5 icons (no mic/voice):
+ * Emoji | Sticker | GIF | Settings | More(···)
+ *
+ * Dark mode: circular container around each icon.
+ * Light mode: flat icons.
  */
 @SuppressLint("ViewConstructor")
 class ToolbarView(
     private val ctx: Context,
     private val t: KeyboardTheme,
     private val h: Int,
+    private val onEmoji: () -> Unit,
 ) : LinearLayout(ctx) {
 
-    // Samsung toolbar: emoji | sticker/clipboard | GIF | mic | settings | more
-    private val icons = listOf("☺", "⊞", "GIF", "🎤", "⚙", "···")
+    // 5 icons — no mic
+    private val items = listOf(
+        "☺"   to onEmoji,
+        "⊞"   to {},
+        "GIF" to {},
+        "⚙"   to {},
+        "···" to {},
+    )
 
     init {
         orientation = HORIZONTAL
         gravity     = Gravity.CENTER_VERTICAL
         setBackgroundColor(t.toolbarBg)
         layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, h)
-
-        icons.forEach { icon ->
-            addView(makeIconSlot(icon))
-        }
+        items.forEach { (icon, action) -> addView(slot(icon, action)) }
     }
 
     @SuppressLint("ClickableViewAccessibility")
-    private fun makeIconSlot(icon: String): FrameLayout {
-        val slotSize = h  // square slot
-        val iconSize = dp(28)
-
+    private fun slot(icon: String, action: () -> Unit): FrameLayout {
+        val iconSizePx = dp(30)
         val fl = FrameLayout(ctx).apply {
-            layoutParams = LayoutParams(0, slotSize, 1f)
-            gravity = Gravity.CENTER
+            layoutParams = LayoutParams(0, h, 1f)
         }
-
-        // In dark mode: circular bg ring around icon (Samsung style)
-        val iconContainer = FrameLayout(ctx).apply {
-            val size = iconSize
-            layoutParams = FrameLayout.LayoutParams(size, size).also {
+        val container = FrameLayout(ctx).apply {
+            layoutParams = FrameLayout.LayoutParams(iconSizePx, iconSizePx).also {
                 it.gravity = Gravity.CENTER
             }
             if (t.isDark) {
                 background = GradientDrawable().apply {
                     shape        = GradientDrawable.OVAL
-                    setColor(android.graphics.Color.parseColor("#1E2D3D"))
+                    setColor(android.graphics.Color.parseColor("#1C2B3A"))
                     setStroke(dp(1), android.graphics.Color.parseColor("#2A3D50"))
                 }
             }
         }
-
         val tv = TextView(ctx).apply {
             text      = icon
-            textSize  = if (icon == "GIF" || icon == "···") 11f else 15f
+            textSize  = if (icon.length > 1) 10f else 15f
             gravity   = Gravity.CENTER
             setTextColor(t.toolbarIcon)
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT)
         }
-
-        iconContainer.addView(tv)
-        fl.addView(iconContainer)
-
+        container.addView(tv)
+        fl.addView(container)
         fl.isHapticFeedbackEnabled = true
         fl.setOnClickListener {
             fl.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+            action()
         }
-
         return fl
     }
 

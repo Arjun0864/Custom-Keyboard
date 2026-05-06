@@ -38,6 +38,7 @@ class KeyRowBuilder(
     private val onSymbols : () -> Unit,
     private val onQwerty  : () -> Unit,
     private val enterLbl  : () -> String,
+    private val onSpaceLongPress: () -> Unit = {},
 ) {
     private val qRow1 = arrayOf("q","w","e","r","t","y","u","i","o","p")
     private val qRow2 = arrayOf("a","s","d","f","g","h","j","k","l")
@@ -53,6 +54,11 @@ class KeyRowBuilder(
 
     private val bsHandler  = Handler(Looper.getMainLooper())
     private var bsRunnable : Runnable? = null
+    // Settings-linked values
+    private val radius = t.radius
+    private val fSize  = t.fontSize
+    private val op     = t.keyOpacity
+    private val sh     = t.hasShadow
 
     // ── Entry ─────────────────────────────────────────────────────────────────
 
@@ -109,7 +115,7 @@ class KeyRowBuilder(
             if (i > 0) row.addView(hGap(h))
             val display = if (st.layout == KeyboardState.Layout.QWERTY)
                 st.applyShift(k) else k
-            row.addView(key(display, h, t.letterKey, t.keyText, 1f, 16f) { onCommit(k) })
+            row.addView(key(display, h, t.letterKey, t.keyText, 1f, fSize) { onCommit(k) })
         }
         return row
     }
@@ -129,7 +135,7 @@ class KeyRowBuilder(
         row.addView(spacer(spacer, d.keyH))
         qRow2.forEachIndexed { i, k ->
             if (i > 0) row.addView(hGap(d.keyH))
-            row.addView(key(st.applyShift(k), d.keyH, t.letterKey, t.keyText, 1f, 16f) { onCommit(k) })
+            row.addView(key(st.applyShift(k), d.keyH, t.letterKey, t.keyText, 1f, fSize) { onCommit(k) })
         }
         row.addView(spacer(spacer, d.keyH))
         return row
@@ -142,7 +148,7 @@ class KeyRowBuilder(
         row.addView(hGap(d.keyH))
         qRow3.forEachIndexed { i, k ->
             if (i > 0) row.addView(hGap(d.keyH))
-            row.addView(key(st.applyShift(k), d.keyH, t.letterKey, t.keyText, 1f, 16f) { onCommit(k) })
+            row.addView(key(st.applyShift(k), d.keyH, t.letterKey, t.keyText, 1f, fSize) { onCommit(k) })
         }
         row.addView(hGap(d.keyH))
         row.addView(bsKey())
@@ -217,12 +223,12 @@ class KeyRowBuilder(
         fl.setOnTouchListener { v, ev ->
             when (ev.action) {
                 MotionEvent.ACTION_DOWN -> {
-                    v.background = DrawableUtils.pressed(t.specialKey, t.shadow, d.radius)
+                    v.background = DrawableUtils.pressed(t.specialKey, t.shadow, radius, op, sh)
                     v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                     onBack(); startBs()
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    v.background = DrawableUtils.key(t.specialKey, t.shadow, d.radius)
+                    v.background = DrawableUtils.key(t.specialKey, t.shadow, radius, op, sh)
                     stopBs()
                 }
             }
@@ -233,22 +239,26 @@ class KeyRowBuilder(
 
     private fun spaceKey(h: Int, w: Float): FrameLayout {
         val fl = frame(t.letterKey, h, w)
-        // Dark mode: "< English (UK) >" with arrows, light: "English (US)"
         val spaceLabel = if (t.isDark) "< English (UK) >" else "English (US)"
         fl.addView(lbl(spaceLabel, t.spaceText, 11f))
         fl.setOnTouchListener { v, ev ->
             when (ev.action) {
                 MotionEvent.ACTION_DOWN -> {
-                    v.background = DrawableUtils.pressed(t.letterKey, t.shadow, d.radius)
+                    v.background = DrawableUtils.pressed(t.letterKey, t.shadow, radius, op, sh)
                     v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                 }
                 MotionEvent.ACTION_UP -> {
-                    v.background = DrawableUtils.key(t.letterKey, t.shadow, d.radius)
+                    v.background = DrawableUtils.key(t.letterKey, t.shadow, radius, op, sh)
                     onCommit(" ")
                 }
                 MotionEvent.ACTION_CANCEL ->
-                    v.background = DrawableUtils.key(t.letterKey, t.shadow, d.radius)
+                    v.background = DrawableUtils.key(t.letterKey, t.shadow, radius, op, sh)
             }
+            false
+        }
+        fl.setOnLongClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+            onSpaceLongPress()
             true
         }
         return fl
@@ -269,15 +279,15 @@ class KeyRowBuilder(
         fl.setOnTouchListener { v, ev ->
             when (ev.action) {
                 MotionEvent.ACTION_DOWN -> {
-                    v.background = DrawableUtils.pressed(bg, t.shadow, d.radius)
+                    v.background = DrawableUtils.pressed(bg, t.shadow, radius, op, sh)
                     v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                 }
                 MotionEvent.ACTION_UP -> {
-                    v.background = DrawableUtils.key(bg, t.shadow, d.radius)
+                    v.background = DrawableUtils.key(bg, t.shadow, radius, op, sh)
                     action()
                 }
                 MotionEvent.ACTION_CANCEL ->
-                    v.background = DrawableUtils.key(bg, t.shadow, d.radius)
+                    v.background = DrawableUtils.key(bg, t.shadow, radius, op, sh)
             }
             true
         }
@@ -288,7 +298,7 @@ class KeyRowBuilder(
 
     private fun frame(bg: Int, h: Int, w: Float) = FrameLayout(ctx).apply {
         layoutParams = LinearLayout.LayoutParams(0, h, w)
-        background   = DrawableUtils.key(bg, t.shadow, d.radius)
+        background   = DrawableUtils.key(bg, t.shadow, radius, op, sh)
     }
 
     private fun lbl(text: String, color: Int, sp: Float) = TextView(ctx).apply {

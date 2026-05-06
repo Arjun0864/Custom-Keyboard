@@ -1,5 +1,6 @@
 package com.example.flutterboard
 
+import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Color
 
@@ -7,7 +8,7 @@ data class KeyboardTheme(
     val bg          : Int,
     val letterKey   : Int,
     val specialKey  : Int,
-    val numKey      : Int,   // number row key bg (same as letterKey in light, darker in dark)
+    val numKey      : Int,
     val keyText     : Int,
     val shadow      : Int,
     val enterBg     : Int,
@@ -22,58 +23,81 @@ data class KeyboardTheme(
     val suggDivider : Int,
     val shiftOn     : Int,
     val isDark      : Boolean,
+    // From settings
+    val radius      : Float,
+    val fontSize    : Float,
+    val keyOpacity  : Float,
+    val hasShadow   : Boolean,
 ) {
     companion object {
 
-        // ── Light — matches right reference image exactly ──────────────────────
-        val LIGHT = KeyboardTheme(
-            bg          = Color.parseColor("#D4D7DC"),  // Samsung light gray bg
-            letterKey   = Color.parseColor("#FFFFFF"),  // pure white letter keys
-            specialKey  = Color.parseColor("#B0B6BE"),  // gray special keys
-            numKey      = Color.parseColor("#FFFFFF"),  // number row same as letter
+        fun resolve(ctx: Context): KeyboardTheme {
+            val dark   = KeyboardPrefs.isDark(ctx)
+            val accent = KeyboardPrefs.accentColor(ctx)
+            val r      = KeyboardPrefs.keyBorderRadius(ctx)
+            val fs     = KeyboardPrefs.fontSize(ctx)
+            val op     = KeyboardPrefs.keyOpacity(ctx)
+            val shadow = KeyboardPrefs.keyShadow(ctx)
+
+            return if (dark) dark(ctx, accent, r, fs, op, shadow)
+            else light(ctx, accent, r, fs, op, shadow)
+        }
+
+        // ── Light ──────────────────────────────────────────────────────────────
+        // Exact match to screenshot: bg #E3E5E8, white keys, gray special
+        private fun light(
+            ctx: Context, accent: Int, r: Float, fs: Float, op: Float, sh: Boolean
+        ) = KeyboardTheme(
+            bg          = Color.parseColor("#E3E5E8"),
+            letterKey   = Color.WHITE,
+            specialKey  = Color.parseColor("#C5C8CE"),
+            numKey      = Color.WHITE,
             keyText     = Color.parseColor("#1A1A1A"),
-            shadow      = Color.parseColor("#9AA0A6"),
-            enterBg     = Color.parseColor("#007AFF"),  // Samsung blue
+            shadow      = Color.parseColor("#A8ADB5"),
+            enterBg     = accent,
             enterText   = Color.WHITE,
             spaceText   = Color.parseColor("#6B7280"),
-            toolbarBg   = Color.parseColor("#D4D7DC"),
+            toolbarBg   = Color.parseColor("#E3E5E8"),
             toolbarIcon = Color.parseColor("#6B7280"),
-            divider     = Color.parseColor("#B8BCC2"),
-            suggBg      = Color.parseColor("#D4D7DC"),
+            divider     = Color.parseColor("#C5C8CE"),
+            suggBg      = Color.parseColor("#E3E5E8"),
             suggCenter  = Color.parseColor("#1A1A1A"),
             suggSide    = Color.parseColor("#6B7280"),
-            suggDivider = Color.parseColor("#B8BCC2"),
-            shiftOn     = Color.parseColor("#007AFF"),
+            suggDivider = Color.parseColor("#C5C8CE"),
+            shiftOn     = accent,
             isDark      = false,
+            radius      = r,
+            fontSize    = fs,
+            keyOpacity  = op,
+            hasShadow   = sh,
         )
 
-        // ── Dark — matches left reference image exactly ────────────────────────
-        // Background: very dark navy, keys: dark teal/slate
-        val DARK = KeyboardTheme(
-            bg          = Color.parseColor("#0E1621"),  // very dark navy bg
-            letterKey   = Color.parseColor("#1B2B3A"),  // dark teal letter keys
-            specialKey  = Color.parseColor("#0E1621"),  // same as bg for special keys
-            numKey      = Color.parseColor("#1B2B3A"),  // number row same as letter
-            keyText     = Color.parseColor("#FFFFFF"),
-            shadow      = Color.parseColor("#060C12"),
-            enterBg     = Color.parseColor("#007AFF"),
+        // ── Dark ───────────────────────────────────────────────────────────────
+        private fun dark(
+            ctx: Context, accent: Int, r: Float, fs: Float, op: Float, sh: Boolean
+        ) = KeyboardTheme(
+            bg          = Color.parseColor("#0D1117"),
+            letterKey   = Color.parseColor("#1C2B3A"),
+            specialKey  = Color.parseColor("#0D1117"),
+            numKey      = Color.parseColor("#1C2B3A"),
+            keyText     = Color.WHITE,
+            shadow      = Color.parseColor("#050A0F"),
+            enterBg     = accent,
             enterText   = Color.WHITE,
             spaceText   = Color.parseColor("#8A9BB0"),
-            toolbarBg   = Color.parseColor("#0E1621"),
+            toolbarBg   = Color.parseColor("#0D1117"),
             toolbarIcon = Color.parseColor("#8A9BB0"),
-            divider     = Color.parseColor("#1E2D3D"),
-            suggBg      = Color.parseColor("#0E1621"),
+            divider     = Color.parseColor("#1C2B3A"),
+            suggBg      = Color.parseColor("#0D1117"),
             suggCenter  = Color.WHITE,
             suggSide    = Color.parseColor("#8A9BB0"),
-            suggDivider = Color.parseColor("#1E2D3D"),
-            shiftOn     = Color.parseColor("#007AFF"),
+            suggDivider = Color.parseColor("#1C2B3A"),
+            shiftOn     = accent,
             isDark      = true,
+            radius      = r,
+            fontSize    = fs,
+            keyOpacity  = op,
+            hasShadow   = sh,
         )
-
-        fun resolve(ctx: android.content.Context): KeyboardTheme {
-            val isDark = (ctx.resources.configuration.uiMode and
-                    Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-            return if (isDark) DARK else LIGHT
-        }
     }
 }
